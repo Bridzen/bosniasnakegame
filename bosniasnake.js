@@ -255,6 +255,9 @@ export default function BosniaSnakeFixedRuntime() {
   const mouse = useRef({ x: 0, y: 0 });
   const keys = useRef({});
 
+  // Use a ref to store current render/update functions to avoid stale closures during development hot-reloads
+  const gameLogicRef = useRef({});
+
   const gameState = useRef({
     mode: null,
     players: [],
@@ -499,8 +502,8 @@ export default function BosniaSnakeFixedRuntime() {
       mouse.current.y = e.clientY;
     };
     const handleMouseDown = (e) => {
-      // Click to Respawn Logic
       const me = gameState.current.players[myPlayerIndex];
+      // Explicit reset call if dead
       if (me && me.dead && menuState === "playing" && !isSpectating) {
         resetWorld(true);
       }
@@ -510,7 +513,6 @@ export default function BosniaSnakeFixedRuntime() {
       mouse.current.x = e.touches[0].clientX;
       mouse.current.y = e.touches[0].clientY;
 
-      // Touch to Respawn Logic
       const me = gameState.current.players[myPlayerIndex];
       if (me && me.dead && menuState === "playing" && !isSpectating) {
         resetWorld(true);
@@ -663,6 +665,17 @@ export default function BosniaSnakeFixedRuntime() {
     })),
   });
 
+  // --- REFRESH LOGIC REF ---
+  // This hook ensures that every render, the ref points to the LATEST version of the functions.
+  // This solves the problem where the loop keeps running old code after you save the file.
+  useEffect(() => {
+    gameLogicRef.current = {
+      updateSinglePlayer,
+      renderGame,
+      updateSpectatorInterpolation,
+    };
+  });
+
   // --- GAME LOOP ---
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -702,7 +715,10 @@ export default function BosniaSnakeFixedRuntime() {
           ctx.stroke();
         }
       } else {
+        // --- RETRIEVE FRESH LOGIC FROM REF ---
+        const logic = gameLogicRef.current;
         const state = gameState.current;
+
         if (
           !isSpectating &&
           state.players[myPlayerIndex] &&
@@ -715,8 +731,8 @@ export default function BosniaSnakeFixedRuntime() {
           });
         }
 
-        if (isHost) {
-          updateSinglePlayer();
+        if (isHost && logic.updateSinglePlayer) {
+          logic.updateSinglePlayer(); // Call the latest version
           if (timestamp - lastSentTime.current > BROADCAST_RATE) {
             const payload = { type: "STATE", state: compressState(state) };
             connections.current.forEach((c) => {
@@ -724,15 +740,17 @@ export default function BosniaSnakeFixedRuntime() {
             });
             lastSentTime.current = timestamp;
           }
-        } else if (isSpectating) {
-          updateSpectatorInterpolation();
+        } else if (isSpectating && logic.updateSpectatorInterpolation) {
+          logic.updateSpectatorInterpolation();
         }
 
         let renderIndex = myPlayerIndex;
         if (isSpectating && state.players.length > 0) {
           renderIndex = 0;
         }
-        renderGame(ctx, canvas, renderIndex);
+        if (logic.renderGame) {
+          logic.renderGame(ctx, canvas, renderIndex); // Call the latest version
+        }
       }
       animationId = requestAnimationFrame(loop);
     };
@@ -1183,7 +1201,7 @@ export default function BosniaSnakeFixedRuntime() {
       // UPDATED: Aggressive AI Growth Logic
       if (!enemy.baseScale) enemy.baseScale = 12;
       const currentCalculatedWidth =
-        12 + Math.min(60, (enemy.length - 140) / 8); // Changed /10 to /8 for faster width growth
+        12 + Math.min(60, (enemy.length - 140) / 8); // Faster width growth
       if (currentCalculatedWidth > enemy.baseScale)
         enemy.baseScale = currentCalculatedWidth;
       enemy.width = enemy.baseScale;
@@ -1370,7 +1388,7 @@ export default function BosniaSnakeFixedRuntime() {
       for (let i = state.food.length - 1; i >= 0; i--) {
         if (coll(enemy, state.food[i], enemy.width + 10)) {
           state.food.splice(i, 1);
-          // UPDATED: Much faster growth for AI
+          // UPDATED: Much faster growth for AI (+20 length per food)
           enemy.length += 20;
         }
       }
@@ -1614,20 +1632,24 @@ export default function BosniaSnakeFixedRuntime() {
       }
     });
 
-    // UPDATED: SERBIAN MINES
+    // UPDATED: SERBIAN MINES (With aggressive warning)
     state.mines.forEach((m) => {
       const r = 35; // Mine Size
 
       // WARNING FLASH (RED BLAST RADIUS)
       if (m.state === "triggered") {
         const timeElapsed = (Date.now() - m.lastTick) / 1000;
-        const pulse = (Date.now() % 300) / 150;
+        // Pulse faster as time runs out
+        const pulseSpeed = 150 - timeElapsed * 40; 
+        const pulse = (Date.now() % Math.max(50, pulseSpeed)) / Math.max(50, pulseSpeed);
+        
         ctx.beginPath();
+        // Expands as time goes on
         ctx.arc(m.x, m.y, 300 * (timeElapsed / 3), 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 0, 0, ${0.2 + pulse * 0.1})`;
+        ctx.fillStyle = `rgba(255, 0, 0, ${0.1 + pulse * 0.3})`;
         ctx.fill();
-        ctx.strokeStyle = "red";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(255, 0, 0, ${0.5 + pulse * 0.5})`;
+        ctx.lineWidth = 3;
         ctx.stroke();
       }
 
@@ -1687,8 +1709,8 @@ export default function BosniaSnakeFixedRuntime() {
         );
         ctx.fillStyle = "white";
         ctx.strokeStyle = "black";
-        ctx.lineWidth = 3;
-        ctx.font = "bold 20px Arial";
+        ctx.lineWidth = 4;
+        ctx.font = "bold 24px Arial";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.strokeText(remaining, m.x, m.y);
