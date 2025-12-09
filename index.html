@@ -1269,14 +1269,17 @@
             } catch(e) { console.error("LB Error", e); }
         }
 
-        async function startScanner() {
-            // Leaderboard
+     async function startScanner() {
+            // Leaderboard Listener
             onSnapshot(query(collection(db, "leaderboard"), orderBy("size", "desc"), limit(5)), (snap) => {
-                const div = document.getElementById('leaderboard-content');
+                const div = document.getElementById('leaderboard-content'); 
                 div.innerHTML = '';
-                snap.forEach((d, i) => {
-                    const r = document.createElement('div');
+                
+                // FIX: Use snap.docs.forEach instead of snap.forEach
+                snap.docs.forEach((d, i) => {
+                    const r = document.createElement('div'); 
                     r.className = 'row';
+                    // Now 'i' is the correct index number (0, 1, 2, 3, 4)
                     r.innerHTML = `<span style="color:${i===0?'#FECB00':'white'}">${i+1}. ${d.data().name}</span> <span style="color:#4caf50">${Math.round(d.data().size)}</span>`;
                     div.appendChild(r);
                 });
@@ -1286,16 +1289,18 @@
             setInterval(async () => {
                 const q = query(collection(db, "active_games"), orderBy("lastBeat", "desc"), limit(20));
                 const snap = await getDocs(q);
-                const list = document.getElementById('spectate-list');
+                const list = document.getElementById('spectate-list'); 
                 list.innerHTML = '';
                 document.getElementById('scan-status').innerText = "";
-                const now = Date.now();
                 let found = 0;
-                snap.forEach(doc => {
+                const now = Date.now();
+                
+                // Using snap.docs here is also good practice, though not strictly required if you aren't using the index 'i'
+                snap.docs.forEach(doc => {
                     const data = doc.data();
                     if(data.lastBeat && (now - data.lastBeat.toMillis() < 30000)) {
                         found++;
-                        const row = document.createElement('div');
+                        const row = document.createElement('div'); 
                         row.className = 'spectate-row';
                         row.innerHTML = `<div><b>${data.host}</b></div><div style="background:#28a745; padding:3px 6px; border-radius:3px; font-size:10px;">WATCH</div>`;
                         row.onclick = () => initSpectate(doc.id);
@@ -1322,4 +1327,5 @@
     </script>
 </body>
 </html>
+
 
