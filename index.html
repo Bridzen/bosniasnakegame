@@ -4,309 +4,70 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Bosnia Snake - World Edition</title>
+    <!-- Import PeerJS -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #080b12;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: white;
-            user-select: none;
-            -webkit-user-select: none;
-        }
+        body { margin: 0; overflow: hidden; background-color: #080b12; font-family: 'Segoe UI', sans-serif; color: white; user-select: none; }
+        #game-canvas { display: block; width: 100vw; height: 100vh; }
+        
+        /* UI LAYERS */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .pointer-events-auto { pointer-events: auto; }
 
-        #game-canvas {
-            display: block;
-            width: 100vw;
-            height: 100vh;
-        }
-
-        /* --- UI OVERLAYS --- */
-        #ui-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
-
-        .pointer-events-auto {
-            pointer-events: auto;
-        }
-
-        /* --- HUD --- */
-        #hud {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            width: 220px;
-            height: 50px;
-            background: rgba(0, 15, 60, 0.7);
-            border: 2px solid #0055A4;
-            border-radius: 10px;
-            display: none; /* Hidden on start */
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 15px;
-            box-sizing: border-box;
-        }
+        /* HUD */
+        #hud { position: absolute; top: 20px; left: 20px; width: 220px; height: 50px; background: rgba(0, 15, 60, 0.7); border: 2px solid #0055A4; border-radius: 10px; display: none; align-items: center; justify-content: space-between; padding: 0 15px; box-sizing: border-box; }
         #hud-size { font-weight: bold; font-size: 22px; }
         #hud-kills { font-weight: bold; font-size: 14px; color: #FECB00; }
 
-        #ability-indicator {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            display: none; /* Hidden unless special skin */
-            flex-direction: column;
-            align-items: center;
-        }
+        /* MENUS */
+        #menu-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 15px; height: 700px; pointer-events: auto; }
+        .panel { background: rgba(0, 15, 60, 0.85); backdrop-filter: blur(20px); border: 2px solid #FECB00; border-radius: 10px; box-shadow: 0 0 40px rgba(0, 47, 108, 0.5); display: flex; flex-direction: column; padding: 25px; }
+        #stats-panel, #leaderboard-panel { width: 220px; background: rgba(0, 35, 149, 0.6); border: 1px solid rgba(254, 203, 0, 0.3); }
+        #main-menu { width: 500px; overflow-y: auto; }
 
-        /* --- MENUS --- */
-        #menu-container {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            display: flex;
-            gap: 15px;
-            height: 700px;
-            pointer-events: auto;
-        }
+        h1 { font-size: 50px; font-weight: 900; text-align: center; margin: 0 0 30px 0; text-shadow: 2px 2px 0px #002F6C, 0 0 15px #FECB00; }
+        .header-text { color: #FECB00; font-size: 18px; font-weight: 900; text-transform: uppercase; border-bottom: 2px solid #002F6C; padding-bottom: 15px; margin-bottom: 20px; text-align: center; }
+        .row { display: flex; justify-content: space-between; font-size: 14px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
 
-        .panel {
-            background: rgba(0, 15, 60, 0.85);
-            backdrop-filter: blur(20px);
-            border: 2px solid #FECB00;
-            border-radius: 10px;
-            box-shadow: 0 0 40px rgba(0, 47, 108, 0.5);
-            display: flex;
-            flex-direction: column;
-            padding: 25px;
-        }
+        /* CONTROLS */
+        input[type="text"] { background: rgba(255,255,255,0.1); border: 1px solid #444; color: white; font-size: 16px; width: 100%; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 15px; outline: none; box-sizing: border-box; }
+        button { border: none; border-radius: 5px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+        .btn-primary { width: 100%; padding: 18px; background: linear-gradient(to right, #002F6C, #0055A4); color: white; font-size: 16px; margin-top: 10px; box-shadow: 0 4px 0 rgba(0,0,0,0.3); }
+        .btn-primary:active { transform: translateY(2px); }
+        .btn-toggle { flex: 1; padding: 12px; background: #222; color: #888; }
+        .btn-toggle.active { background: #FECB00; color: black; }
 
-        #stats-panel, #leaderboard-panel {
-            width: 220px;
-            background: rgba(0, 35, 149, 0.6);
-            border: 1px solid rgba(254, 203, 0, 0.3);
-        }
+        /* SKINS */
+        #skin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; overflow-y: auto; flex: 1; margin-bottom: 20px; min-height: 200px; padding-right: 5px; }
+        .skin-tile { background: rgba(255,255,255,0.05); border: 1px solid #333; border-radius: 5px; padding: 15px; cursor: pointer; display: flex; flex-direction: column; align-items: center; position: relative; }
+        .skin-tile.selected { background: rgba(254, 203, 0, 0.2); border-color: #FECB00; }
+        .skin-tile.locked { opacity: 0.6; cursor: not-allowed; }
+        .skin-color-dot { width: 25px; height: 25px; border-radius: 50%; border: 1px solid white; margin-bottom: 8px; }
+        .lock-text { font-size: 10px; color: #ff5555; font-weight: bold; margin-top: 5px; }
 
-        #main-menu {
-            width: 500px;
-            overflow-y: auto;
-        }
+        /* CHAT */
+        #chat-container { position: absolute; bottom: 10px; left: 10px; width: 300px; height: 200px; display: none; flex-direction: column; pointer-events: auto; z-index: 100; }
+        #chat-messages { flex: 1; overflow-y: hidden; display: flex; flex-direction: column; justify-content: flex-end; text-shadow: 1px 1px 2px black; margin-bottom: 5px; }
+        .chat-line { font-size: 14px; margin-bottom: 2px; background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 4px; }
+        #chat-input { background: rgba(0,0,0,0.5); border: 1px solid #555; color: white; padding: 8px; border-radius: 4px; outline: none; width: 100%; box-sizing: border-box; }
 
-        h1 {
-            font-size: 50px;
-            font-weight: 900;
-            text-align: center;
-            margin: 0 0 30px 0;
-            text-shadow: 2px 2px 0px #002F6C, 0 0 15px #FECB00;
-        }
-
-        .header-text {
-            color: #FECB00;
-            font-size: 18px;
-            font-weight: 900;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            border-bottom: 2px solid #002F6C;
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 14px;
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-
-        /* --- CONTROLS & INPUTS --- */
-        input[type="text"] {
-            background: rgba(255,255,255,0.1);
-            border: 1px solid #444;
-            color: white;
-            font-size: 16px;
-            width: 100%;
-            padding: 15px;
-            text-align: center;
-            border-radius: 5px;
-            margin-bottom: 15px;
-            outline: none;
-            box-sizing: border-box;
-        }
-
-        button {
-            border: none;
-            border-radius: 5px;
-            font-weight: bold;
-            cursor: pointer;
-            text-transform: uppercase;
-        }
-
-        .btn-primary {
-            width: 100%;
-            padding: 18px;
-            background: linear-gradient(to right, #002F6C, #0055A4);
-            color: white;
-            font-size: 16px;
-            margin-top: 10px;
-            box-shadow: 0 4px 0 rgba(0,0,0,0.3);
-        }
-        .btn-primary:active { box-shadow: 0 2px 0 rgba(0,0,0,0.3); transform: translateY(2px); }
-
-        .btn-toggle {
-            flex: 1;
-            padding: 12px;
-            background: #222;
-            color: #888;
-        }
-        .btn-toggle.active {
-            background: #FECB00;
-            color: black;
-        }
-
-        /* --- SKIN GRID --- */
-        #skin-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            overflow-y: auto;
-            flex: 1;
-            margin-bottom: 20px;
-            min-height: 200px;
-            padding-right: 5px;
-        }
-
-        .skin-tile {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid #333;
-            border-radius: 5px;
-            padding: 15px;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-        }
-        .skin-tile.selected {
-            background: rgba(254, 203, 0, 0.2);
-            border-color: #FECB00;
-        }
-        .skin-tile.locked {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        .skin-color-dot {
-            width: 25px;
-            height: 25px;
-            border-radius: 50%;
-            border: 1px solid white;
-            margin-bottom: 8px;
-        }
-        .lock-text {
-            font-size: 10px;
-            color: #ff5555;
-            font-weight: bold;
-            margin-top: 5px;
-            text-align: center;
-        }
-
-        /* --- CHAT --- */
-        #chat-container {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            width: 300px;
-            height: 200px;
-            display: flex;
-            flex-direction: column;
-            pointer-events: auto;
-            z-index: 100;
-            display: none; /* Hidden on start */
-        }
-        #chat-messages {
-            flex: 1;
-            overflow-y: hidden;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            text-shadow: 1px 1px 2px black;
-            margin-bottom: 5px;
-        }
-        .chat-line {
-            font-size: 14px;
-            margin-bottom: 2px;
-            background: rgba(0,0,0,0.3);
-            padding: 2px 5px;
-            border-radius: 4px;
-        }
-        #chat-input {
-            background: rgba(0,0,0,0.5);
-            border: 1px solid #555;
-            color: white;
-            padding: 8px;
-            border-radius: 4px;
-            outline: none;
-            width: 100%;
-            box-sizing: border-box;
-        }
-
-        /* --- SPECTATE LIST --- */
-        #spectate-list {
-            max-height: 120px;
-            overflow-y: auto;
-        }
-        .spectate-row {
-            padding: 10px;
-            background: #222;
-            margin-bottom: 5px;
-            border-radius: 5px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        /* SPECTATE */
+        #spectate-list { max-height: 120px; overflow-y: auto; }
+        .spectate-row { padding: 10px; background: #222; margin-bottom: 5px; border-radius: 5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
         .spectate-row:hover { background: #333; }
         
-        #death-screen {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            display: none;
-            pointer-events: none;
-        }
-        #spectator-label {
-            position: absolute;
-            top: 20px;
-            width: 100%;
-            text-align: center;
-            font-size: 30px;
-            font-weight: bold;
-            text-shadow: 0px 0px 5px black;
-            display: none;
-        }
-
-        /* Scrollbar styling */
+        #death-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; display: none; pointer-events: none; }
+        #spectator-label { position: absolute; top: 20px; width: 100%; text-align: center; font-size: 30px; font-weight: bold; text-shadow: 0px 0px 5px black; display: none; }
+        
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
         ::-webkit-scrollbar-thumb { background: #FECB00; border-radius: 3px; }
     </style>
 </head>
 <body>
-
     <canvas id="game-canvas"></canvas>
 
     <div id="ui-layer">
-        <!-- GAME HUD -->
         <div id="hud">
             <div id="hud-size">Size: 18.0</div>
             <div id="hud-kills">Kills: 0</div>
@@ -314,16 +75,13 @@
 
         <div id="spectator-label">SPECTATOR MODE</div>
 
-        <!-- MENU CONTAINER -->
         <div id="menu-container">
-            <!-- Left Stats -->
             <div id="stats-panel" class="panel">
                 <div class="header-text">Stats</div>
                 <div class="row"><span>KILLS</span><span id="stat-kills" style="color: #FECB00">0</span></div>
                 <div class="row"><span>DEATHS</span><span id="stat-deaths" style="color: #FECB00">0</span></div>
                 <div class="row"><span>BEST SIZE</span><span id="stat-best-size" style="color: #FECB00">18.0</span></div>
                 <div class="row"><span>GAMES</span><span id="stat-games" style="color: #FECB00">0</span></div>
-                
                 <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid #333;">
                     <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">SECRET CODE</div>
                     <input type="text" id="redeem-input" style="font-size: 12px; padding: 10px; margin-bottom: 8px;" placeholder="...">
@@ -331,40 +89,30 @@
                 </div>
             </div>
 
-            <!-- Main Menu -->
             <div id="main-menu" class="panel">
                 <h1>BOSNIA SNAKE</h1>
-
-                <!-- Control Mode -->
                 <div style="display: flex; gap: 15px; margin-bottom: 20px;">
                     <button id="btn-mouse" class="btn-toggle active">MOUSE</button>
                     <button id="btn-keyboard" class="btn-toggle">KEYBOARD</button>
                 </div>
-
-                <!-- Skin Selection -->
                 <div style="font-size: 12px; color: #aaa; margin-bottom: 5px; text-transform: uppercase;">SELECT SKIN</div>
                 <div style="display: flex; margin-bottom: 10px; gap: 5px;">
                     <button id="cat-normal" class="btn-toggle active" style="padding: 8px; font-size: 12px;">NORMAL</button>
                     <button id="cat-special" class="btn-toggle" style="padding: 8px; font-size: 12px;">SPECIAL</button>
                 </div>
-
                 <div id="skin-grid"></div>
-
                 <input type="text" id="nickname-input" placeholder="NICKNAME">
                 <button id="btn-play" class="btn-primary">PLAY SOLO</button>
-
-                <!-- Spectate List -->
                 <div style="margin-top: 20px; border-top: 1px solid #333; padding-top: 15px;">
                     <div style="color: #FECB00; font-weight: bold; margin-bottom: 10px; font-size: 14px;">
                         LIVE GAMES <span id="scan-status" style="font-size: 10px; color: #666; font-weight: normal;">(Scanning...)</span>
                     </div>
                     <div id="spectate-list">
-                        <div style="color: #666; font-size: 12px; font-style: italic;">Connecting to server...</div>
+                        <div style="color: #666; font-size: 12px; font-style: italic;">Connecting to database...</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Leaderboard -->
             <div id="leaderboard-panel" class="panel">
                 <div class="header-text">Top 5</div>
                 <div id="leaderboard-content">
@@ -373,26 +121,23 @@
             </div>
         </div>
 
-        <!-- Chat -->
         <div id="chat-container">
             <div id="chat-messages"></div>
             <input type="text" id="chat-input" placeholder="Type to chat...">
         </div>
 
-        <!-- Death Screen -->
         <div id="death-screen">
             <div style="font-size: 50px; font-weight: 900; text-shadow: 2px 2px 0 black;">YOU DIED</div>
             <div style="font-size: 20px; margin-top: 10px;">Press R to Restart</div>
         </div>
     </div>
 
-    <!-- MAIN GAME LOGIC -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
         import { getFirestore, collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp, where, getDocs, updateDoc, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-        // --- FIREBASE CONFIG ---
+        // FIREBASE CONFIG
         const firebaseConfig = {
             apiKey: "AIzaSyDfTRtLoB37SCPgAcQsxjmcuSPOHThuHNk",
             authDomain: "bosniasnake.firebaseapp.com",
@@ -407,20 +152,13 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // --- GAME CONSTANTS ---
-        const CELL = 150;
-        const GRID = 80;
-        const WORLD_SIZE = CELL * GRID;
-        const MIN_LENGTH = 140;
-        const SPRINT_COST = 0.5;
-        const BASE_SPEED = 4.2;
-        const TURN_SPEED = 0.09;
-        const MAX_ENEMIES = 8;
-        const SIZE_GAIN_PER_LEVEL = 0.25;
-        const FOOD_RADIUS_BASE = 6;
-        const LENGTH_GAIN = 8;
-        const BROADCAST_RATE = 50;
-        const INTERPOLATION_SPEED = 0.2;
+        // GAME CONSTANTS
+        const CELL = 150; const GRID = 80; const WORLD_SIZE = CELL * GRID;
+        const MIN_LENGTH = 140; const SPRINT_COST = 0.5;
+        const BASE_SPEED = 4.2; const TURN_SPEED = 0.09;
+        const MAX_ENEMIES = 8; const SIZE_GAIN_PER_LEVEL = 0.25;
+        const FOOD_RADIUS_BASE = 6; const LENGTH_GAIN = 8;
+        const BROADCAST_RATE = 50; const INTERPOLATION_SPEED = 0.2;
 
         const SKINS_NORMAL = ["bosnia", "italy", "poland", "france", "germany", "ukraine", "sweden", "denmark", "uk", "usa", "russia", "canada"];
         const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple"];
@@ -432,108 +170,76 @@
         };
 
         const UNLOCK_CRITERIA = {
-            bosnia: { type: "default", label: "Default" },
-            italy:  { type: "default", label: "Default" },
-            germany: { type: "scale", val: 40, label: "Reach Size 40" },
-            france: { type: "deaths", val: 5, label: "Die 5 Times" },
-            sweden: { type: "kills", val: 10, label: "Get 10 Kills" },
-            denmark: { type: "kills", val: 25, label: "Get 25 Kills" },
-            poland: { type: "deaths", val: 15, label: "Die 15 Times" },
-            uk: { type: "length", val: 800, label: "Reach Length 800" },
-            ukraine: { type: "games", val: 5, label: "Play 5 Games" },
-            canada: { type: "length", val: 1000, label: "Reach Length 1k" },
-            russia: { type: "scale", val: 50, label: "Reach Size 50" },
-            usa: { type: "scale", val: 75, label: "Reach Size 75" },
-            ireland: { type: "code", label: "Secret Code" },
-            soviet: { type: "custom_soviet", label: "Russia + Size 500 + 50 Kills" },
+            bosnia: { type: "default", label: "Default" }, italy:  { type: "default", label: "Default" },
+            germany: { type: "scale", val: 40, label: "Reach Size 40" }, france: { type: "deaths", val: 5, label: "Die 5 Times" },
+            sweden: { type: "kills", val: 10, label: "Get 10 Kills" }, denmark: { type: "kills", val: 25, label: "Get 25 Kills" },
+            poland: { type: "deaths", val: 15, label: "Die 15 Times" }, uk: { type: "length", val: 800, label: "Reach Length 800" },
+            ukraine: { type: "games", val: 5, label: "Play 5 Games" }, canada: { type: "length", val: 1000, label: "Reach Length 1k" },
+            russia: { type: "scale", val: 50, label: "Reach Size 50" }, usa: { type: "scale", val: 75, label: "Reach Size 75" },
+            ireland: { type: "code", label: "Secret Code" }, soviet: { type: "custom_soviet", label: "Russia + Size 500 + 50 Kills" },
             golden_maple: { type: "custom_maple", label: "Canada + Size 250 + 150 Kills" },
         };
 
-        // --- GLOBAL STATE ---
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
         let currentState = {
-            menu: 'start', // start, playing, death
-            controlMode: 'mouse', // mouse, keyboard
-            skinCategory: 'normal',
-            selectedSkin: 'bosnia',
+            menu: 'start', controlMode: 'mouse', skinCategory: 'normal', selectedSkin: 'bosnia',
             playerName: localStorage.getItem('bosnia_snake_username') || "Player" + Math.floor(Math.random() * 999),
-            isHost: false,
-            isSpectating: false,
-            myId: null,
-            myPlayerIndex: 0,
-            spectateId: null
+            isHost: false, isSpectating: false, myId: null, myPlayerIndex: 0
         };
 
         let userStats = JSON.parse(localStorage.getItem('bosnia_snake_stats_v2')) || {
             totalKills: 0, totalDeaths: 0, bestScale: 18, bestLength: 140, gamesPlayed: 0, unlockedSecrets: []
         };
 
-        let gameData = {
-            mode: null, players: [], enemies: [], food: [], mines: [], explosions: [], syrupZones: [], shakeIntensity: 0, gameOver: false
-        };
+        let gameData = { mode: null, players: [], enemies: [], food: [], mines: [], explosions: [], syrupZones: [], shakeIntensity: 0, gameOver: false };
+        const mouse = { x: 0, y: 0 }; const keys = {};
 
-        // Inputs
-        const mouse = { x: 0, y: 0 };
-        const keys = {};
-
-        // Networking
+        // NETWORKING
         let peer = null;
-        let connections = []; // For host
-        let hostConn = null; // For client
+        let connections = []; 
+        let hostConn = null;
         let lastSentTime = 0;
-        let serverState = null; // For interpolation
+        let serverState = null;
+        let heartbeatInterval = null;
 
-        // --- AUDIO ENGINE ---
+        // AUTH & INIT
+        signInAnonymously(auth).then(() => {
+            console.log("Authenticated");
+            startScanner();
+        }).catch((e) => {
+            console.error("Auth Error:", e);
+            alert("Database Connection Failed. Check Console.");
+        });
+
+        // AUDIO
         function playSound(type) {
             if (audioCtx.state === "suspended") audioCtx.resume();
             const now = audioCtx.currentTime;
             const gainNode = audioCtx.createGain();
             gainNode.connect(audioCtx.destination);
-
             if (type === "eat") {
                 const osc = audioCtx.createOscillator();
-                osc.type = "sine";
-                osc.frequency.setValueAtTime(600, now);
-                osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
-                osc.connect(gainNode);
-                gainNode.gain.setValueAtTime(0.05, now);
-                gainNode.gain.linearRampToValueAtTime(0.01, now + 0.1);
-                osc.start(now);
-                osc.stop(now + 0.1);
+                osc.type = "sine"; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
+                osc.connect(gainNode); gainNode.gain.setValueAtTime(0.05, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
             } else if (type === "soviet_boom") {
-                const bufferSize = audioCtx.sampleRate * 1.5;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for(let i=0;i<bufferSize;i++) data[i] = Math.random()*2-1;
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = buffer;
-                const filter = audioCtx.createBiquadFilter();
-                filter.type = "lowpass";
-                filter.frequency.setValueAtTime(800, now);
-                filter.frequency.exponentialRampToValueAtTime(10, now+1);
-                noise.connect(filter);
-                filter.connect(gainNode);
-                gainNode.gain.setValueAtTime(0.8, now);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, now+1);
-                noise.start(now);
-                noise.stop(now+1.5);
+                const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 1.5, audioCtx.sampleRate);
+                const d = buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+                const noise = audioCtx.createBufferSource(); noise.buffer = buf;
+                const f = audioCtx.createBiquadFilter(); f.type = "lowpass"; f.frequency.setValueAtTime(800, now); f.frequency.exponentialRampToValueAtTime(10, now+1);
+                noise.connect(f); f.connect(gainNode); gainNode.gain.setValueAtTime(0.8, now); gainNode.gain.exponentialRampToValueAtTime(0.01, now+1);
+                noise.start(now); noise.stop(now+1.5);
             } else if(type === "chat") {
-                const osc = audioCtx.createOscillator();
-                osc.type = "sine";
-                osc.frequency.setValueAtTime(800, now);
-                osc.frequency.linearRampToValueAtTime(1200, now + 0.1);
-                osc.connect(gainNode);
-                gainNode.gain.setValueAtTime(0.05, now);
-                gainNode.gain.linearRampToValueAtTime(0, now + 0.1);
-                osc.start(now);
-                osc.stop(now + 0.1);
+                const osc = audioCtx.createOscillator(); osc.type = "sine"; osc.frequency.setValueAtTime(800, now); osc.frequency.linearRampToValueAtTime(1200, now + 0.1);
+                osc.connect(gainNode); gainNode.gain.setValueAtTime(0.05, now); gainNode.gain.linearRampToValueAtTime(0, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
             }
         }
 
-        // --- HELPER FUNCTIONS ---
+        // UTILS
         function randPosCell() { return Math.floor(Math.random() * GRID) * CELL - WORLD_SIZE / 2; }
         function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
         function coll(a, b, r) { return dist(a, b) < r; }
@@ -543,20 +249,6 @@
             const da = (b - a) % (2 * Math.PI);
             const twoD = ((2 * da) % (2 * Math.PI)) - da;
             return a + twoD * t;
-        }
-
-        // --- AUTH & SETUP ---
-        signInAnonymously(auth).then(() => {
-            console.log("Firebase Auth Success");
-            startScanner();
-        }).catch(console.error);
-
-        // --- UI LOGIC ---
-        function updateStatsUI() {
-            document.getElementById('stat-kills').innerText = userStats.totalKills;
-            document.getElementById('stat-deaths').innerText = userStats.totalDeaths;
-            document.getElementById('stat-best-size').innerText = userStats.bestScale.toFixed(1);
-            document.getElementById('stat-games').innerText = userStats.gamesPlayed;
         }
 
         function isSkinUnlocked(skin) {
@@ -573,42 +265,14 @@
             return false;
         }
 
-        function renderSkinGrid() {
-            const grid = document.getElementById('skin-grid');
-            grid.innerHTML = '';
-            const list = currentState.skinCategory === 'normal' ? SKINS_NORMAL : SKINS_SPECIAL;
-            
-            list.forEach(skin => {
-                const unlocked = isSkinUnlocked(skin);
-                const req = UNLOCK_CRITERIA[skin];
-                const div = document.createElement('div');
-                div.className = `skin-tile ${currentState.selectedSkin === skin ? 'selected' : ''} ${!unlocked ? 'locked' : ''}`;
-                div.innerHTML = `
-                    <div class="skin-color-dot" style="background: ${SKIN_BODY_COLORS[skin]}"></div>
-                    <div style="font-size: 12px; font-weight: bold; text-transform: capitalize; color: ${unlocked ? 'white' : '#888'}">${skin.replace('_', ' ')}</div>
-                    ${!unlocked ? `<div class="lock-text">🔒 ${req.label}</div>` : ''}
-                `;
-                div.onclick = () => {
-                    if (unlocked) {
-                        currentState.selectedSkin = skin;
-                        renderSkinGrid();
-                    }
-                };
-                grid.appendChild(div);
-            });
-        }
-
         function updateStats(updates) {
             let changed = false;
             if (updates.kill) { userStats.totalKills++; changed = true; }
             if (updates.death) { userStats.totalDeaths++; changed = true; }
             if (updates.game) { userStats.gamesPlayed++; changed = true; }
-            if (updates.unlockSecret && !userStats.unlockedSecrets.includes(updates.unlockSecret)) {
-                userStats.unlockedSecrets.push(updates.unlockSecret); changed = true;
-            }
+            if (updates.unlockSecret && !userStats.unlockedSecrets.includes(updates.unlockSecret)) { userStats.unlockedSecrets.push(updates.unlockSecret); changed = true; }
             if (updates.scale && updates.scale > userStats.bestScale) { userStats.bestScale = updates.scale; changed = true; }
             if (updates.length && updates.length > userStats.bestLength) { userStats.bestLength = updates.length; changed = true; }
-            
             if (changed) {
                 localStorage.setItem('bosnia_snake_stats_v2', JSON.stringify(userStats));
                 updateStatsUI();
@@ -616,40 +280,35 @@
             }
         }
 
-        // --- GAME LOGIC ---
+        // --- GAME CORE ---
         function initSinglePlayer() {
             if (peer) peer.destroy();
-            peer = new Peer();
+            // IMPORTANT: GOOGLE STUN SERVERS
+            peer = new Peer({ config: {'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }]}});
             
             peer.on('open', (id) => {
-                currentState.myId = id;
-                currentState.isHost = true;
-                currentState.isSpectating = false;
-                currentState.myPlayerIndex = 0;
-                currentState.menu = 'playing';
+                currentState.myId = id; currentState.isHost = true; currentState.isSpectating = false; currentState.myPlayerIndex = 0; currentState.menu = 'playing';
 
-                // Publish presence
                 const docRef = doc(db, "active_games", id);
-                setDoc(docRef, { host: currentState.playerName, lastBeat: serverTimestamp() });
-                setInterval(() => {
-                    setDoc(docRef, { host: currentState.playerName, lastBeat: serverTimestamp() }).catch(e=>{});
+                setDoc(docRef, { host: currentState.playerName, lastBeat: serverTimestamp() }).catch(e => console.error("Firestore Write Failed:", e));
+                
+                heartbeatInterval = setInterval(() => {
+                    setDoc(docRef, { host: currentState.playerName, lastBeat: serverTimestamp() }).catch(() => {});
                 }, 5000);
 
+                window.addEventListener("beforeunload", () => { deleteDoc(docRef); });
+
                 updateStats({ game: true });
-                
-                // Initialize Game Data
                 gameData.mode = "single";
                 gameData.players = [{
                     id: 0, active: true, x: 0, y: 0, angle: -Math.PI/2, body: [], length: 140, 
-                    dead: false, country: currentState.selectedSkin, 
-                    colorBody: SKIN_BODY_COLORS[currentState.selectedSkin],
+                    dead: false, country: currentState.selectedSkin, colorBody: SKIN_BODY_COLORS[currentState.selectedSkin],
                     scale: 18, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, 
                     lastAbilityTime: 0, maplePhase: null, name: currentState.playerName
                 }];
                 resetWorld(true);
                 toggleUI('playing');
                 
-                // Host listening for spectators
                 peer.on('connection', (conn) => {
                     connections.push(conn);
                     conn.on('data', (data) => {
@@ -658,75 +317,55 @@
                             broadcastChat({name: data.name, text: data.text, color: "#aaa"});
                         }
                     });
-                    conn.on('close', () => {
-                        connections = connections.filter(c => c !== conn);
-                    });
+                    conn.on('close', () => { connections = connections.filter(c => c !== conn); });
                 });
             });
+            peer.on('error', (err) => alert("PeerJS Error: " + err.type));
         }
 
         function initSpectate(id) {
             if(peer) peer.destroy();
-            peer = new Peer();
+            // IMPORTANT: GOOGLE STUN SERVERS
+            peer = new Peer({ config: {'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }]}});
             peer.on('open', () => {
-                currentState.isHost = false;
-                currentState.isSpectating = true;
+                currentState.isHost = false; currentState.isSpectating = true;
                 const conn = peer.connect(id);
                 hostConn = conn;
                 
                 conn.on('open', () => {
-                    currentState.menu = 'playing';
-                    toggleUI('playing');
-                    addChatMessage("System", "Connected to host", "cyan");
+                    currentState.menu = 'playing'; toggleUI('playing'); addChatMessage("System", "Connected to host", "cyan");
                 });
                 
                 conn.on('data', (data) => {
                     if(data.type === "STATE") {
                         serverState = data.state;
-                        // Init objects if empty
                         if(gameData.players.length === 0) {
                             gameData = JSON.parse(JSON.stringify(data.state));
                             gameData.players.forEach(p => p.body = p.body || []);
                             gameData.enemies.forEach(e => e.body = e.body || []);
                         }
                     }
-                    if(data.type === "CHAT_MSG") {
-                        addChatMessage(data.msg.name, data.msg.text, data.msg.color);
-                    }
+                    if(data.type === "CHAT_MSG") addChatMessage(data.msg.name, data.msg.text, data.msg.color);
                 });
                 
-                conn.on('close', () => {
-                    alert("Host disconnected");
-                    location.reload();
-                });
+                conn.on('close', () => { alert("Host disconnected"); location.reload(); });
             });
+            peer.on('error', (err) => alert("Connect Error: " + err.type));
         }
 
         function resetWorld(spawnBots) {
-            gameData.food = [];
-            gameData.mines = [];
-            gameData.explosions = [];
-            gameData.syrupZones = [];
-            gameData.shakeIntensity = 0;
-
+            gameData.food = []; gameData.mines = []; gameData.explosions = []; gameData.syrupZones = []; gameData.shakeIntensity = 0;
             for(let i=0; i<400; i++) {
-                let lvl = 1;
-                while(lvl < 100 && Math.random() < 0.5) lvl++;
+                let lvl = 1; while(lvl < 100 && Math.random() < 0.5) lvl++;
                 gameData.food.push({x: randPosCell(), y: randPosCell(), level: lvl});
             }
-            for(let i=0; i<80; i++) {
-                gameData.mines.push({x: randPosCell(), y: randPosCell(), state: 'idle', timer: 3.0, lastTick: Date.now()});
-            }
+            for(let i=0; i<80; i++) gameData.mines.push({x: randPosCell(), y: randPosCell(), state: 'idle', timer: 3.0, lastTick: Date.now()});
             gameData.players.forEach(p => {
                 p.x = randPosCell(); p.y = randPosCell(); p.body = []; p.length = 140; p.scale = 18;
                 p.dead = false; p.frozenUntil = 0; p.abilityActive = false; p.lastAbilityTime = 0;
             });
-            if(spawnBots) {
-                gameData.enemies = [];
-                for(let i=0; i<MAX_ENEMIES; i++) spawnOneEnemy();
-            } else {
-                gameData.enemies = [];
-            }
+            gameData.enemies = [];
+            if(spawnBots) { for(let i=0; i<MAX_ENEMIES; i++) spawnOneEnemy(); }
         }
 
         function spawnOneEnemy() {
@@ -739,66 +378,44 @@
             });
         }
 
-        function getLocalInput() {
-            if(currentState.isSpectating) return { targetAngle: null, sprint: false, triggerAbility: false };
+        function updateSinglePlayer() {
+            const p = gameData.players[0];
+            if(p && p.dead) { if(keys['r']) resetWorld(true); return; }
+            gameData.enemies = gameData.enemies.filter(e => e.alive);
+            if(gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.02) spawnOneEnemy();
+            
+            // Physics
+            const now = Date.now();
+            // Input
             const sprint = keys['shift'] || keys['/'];
             const triggerAbility = keys['e'];
             let targetAngle = null;
-            if(currentState.controlMode === 'mouse') {
-                targetAngle = Math.atan2(mouse.y - canvas.height/2, mouse.x - canvas.width/2);
-            } else {
+            if(currentState.controlMode === 'mouse') targetAngle = Math.atan2(mouse.y - canvas.height/2, mouse.x - canvas.width/2);
+            else {
                 let dx=0, dy=0;
-                if(keys['w'] || keys['arrowup']) dy-=1;
-                if(keys['s'] || keys['arrowdown']) dy+=1;
-                if(keys['a'] || keys['arrowleft']) dx-=1;
-                if(keys['d'] || keys['arrowright']) dx+=1;
+                if(keys['w'] || keys['arrowup']) dy-=1; if(keys['s'] || keys['arrowdown']) dy+=1;
+                if(keys['a'] || keys['arrowleft']) dx-=1; if(keys['d'] || keys['arrowright']) dx+=1;
                 if(dx!==0 || dy!==0) targetAngle = Math.atan2(dy, dx);
             }
-            return { targetAngle, sprint, triggerAbility };
-        }
 
-        function updateSinglePlayer() {
-            const p = gameData.players[0];
-            if(p && p.dead) {
-                if(keys['r']) resetWorld(true);
-                return;
-            }
-            
-            // Bot spawning
-            gameData.enemies = gameData.enemies.filter(e => e.alive);
-            if(gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.02) spawnOneEnemy();
-
-            const inp = getLocalInput();
-            if(p) handlePhysics(p, inp);
-            updateAI();
-            if(p) updateEnvironment([p]);
-        }
-
-        function handlePhysics(p, inp) {
-            const now = Date.now();
-            if(p.frozenUntil > now) return;
-
-            // ABILITY LOGIC (Soviet / Maple)
+            // Ability
             if(p.country === 'soviet') {
-                if(inp.sprint && !p.barrageActive && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000)) {
+                if(sprint && !p.barrageActive && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000)) {
                     p.barrageActive = true; p.barrageEndTime = now + 2000; p.nextExplosionTime = now; p.abilityActive = true;
                 }
                 if(p.barrageActive) {
-                    if(now >= p.barrageEndTime) {
-                        p.barrageActive = false; p.abilityActive = false; p.sovietBoost = false; p.lastAbilityTime = now;
-                    } else {
+                    if(now >= p.barrageEndTime) { p.barrageActive = false; p.abilityActive = false; p.sovietBoost = false; p.lastAbilityTime = now; }
+                    else {
                         p.sovietBoost = true;
                         if(now >= p.nextExplosionTime) {
-                            createExplosion(p.x, p.y, 3 * CELL);
-                            gameData.shakeIntensity = Math.min(60, gameData.shakeIntensity+10);
-                            p.nextExplosionTime = now + 200;
-                            playSound("soviet_boom");
+                            createExplosion(p.x, p.y, 3 * CELL); gameData.shakeIntensity = Math.min(60, gameData.shakeIntensity+10);
+                            p.nextExplosionTime = now + 200; playSound("soviet_boom");
                             gameData.enemies.forEach(e => { if(e.alive && dist(e, p) < 3*CELL) killEnemy(e, p); });
                         }
                     }
                 }
             } else if(p.country === 'golden_maple') {
-                if(inp.triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000) && !p.maplePhase) {
+                if(triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000) && !p.maplePhase) {
                     p.maplePhase = 'harvest'; p.phaseEndTime = now + 2500; p.lastAbilityTime = now; playSound("angelic");
                 }
                 if(p.maplePhase === 'harvest' && now > p.phaseEndTime) {
@@ -807,89 +424,63 @@
                 } else if(p.maplePhase === 'syrup' && now > p.phaseEndTime) p.maplePhase = null;
             }
 
-            // Movement
-            let speedMult = 1.0; let turnMult = 1.0;
-            gameData.syrupZones.forEach(z => {
-                if(dist(p, z) < z.radius && z.ownerId !== p.id) { speedMult=0.4; turnMult=0.33; }
-            });
+            let speedMult = 1.0;
+            gameData.syrupZones.forEach(z => { if(dist(p, z) < z.radius && z.ownerId !== p.id) speedMult=0.4; });
 
-            if(inp.targetAngle !== null) {
-                let d = normalizeAngle(inp.targetAngle - p.angle);
-                const effTurn = TURN_SPEED * turnMult;
-                if(Math.abs(d) < effTurn) p.angle = inp.targetAngle;
-                else p.angle += d > 0 ? effTurn : -effTurn;
+            if(targetAngle !== null) {
+                let d = normalizeAngle(targetAngle - p.angle);
+                if(Math.abs(d) < TURN_SPEED) p.angle = targetAngle;
+                else p.angle += d > 0 ? TURN_SPEED : -TURN_SPEED;
                 p.angle = normalizeAngle(p.angle);
             }
 
             let s = BASE_SPEED * speedMult;
-            const canSprint = inp.sprint && p.length > MIN_LENGTH && (!p.abilityActive || p.country === 'soviet');
-            if(canSprint) { s *= 1.8; if(p.sovietBoost) s*=2.0; p.length -= SPRINT_COST; }
-
+            if(sprint && p.length > MIN_LENGTH && (!p.abilityActive || p.country === 'soviet')) { s *= 1.8; if(p.sovietBoost) s*=2.0; p.length -= SPRINT_COST; }
             p.x += Math.cos(p.angle)*s; p.y += Math.sin(p.angle)*s;
             if(Math.abs(p.x) > WORLD_SIZE/2 || Math.abs(p.y) > WORLD_SIZE/2) killPlayer(p, null);
-            
-            p.body.unshift({x: p.x, y: p.y});
-            while(p.body.length > p.length) p.body.pop();
+            p.body.unshift({x: p.x, y: p.y}); while(p.body.length > p.length) p.body.pop();
+
+            // AI
+            updateAI();
+            updateEnvironment([p]);
         }
 
         function updateAI() {
-            // Simplified AI for HTML port - same logic structure as React
-            const state = gameData;
-            state.enemies.forEach(e => {
+            gameData.enemies.forEach(e => {
                 if(!e.alive) return;
                 let targetAngle = e.angle;
-                // Simple wander towards food
                 let closestFood = null; let minD = Infinity;
-                state.food.forEach(f => {
-                    const d = dist(e, f);
-                    if(d < minD && d < 600) { minD = d; closestFood = f; }
+                gameData.food.forEach(f => {
+                    const d = dist(e, f); if(d < minD && d < 600) { minD = d; closestFood = f; }
                 });
                 if(closestFood) targetAngle = Math.atan2(closestFood.y - e.y, closestFood.x - e.x);
-
-                // Avoid Walls
                 const lim = WORLD_SIZE/2 - 100;
-                if(e.x < -lim) targetAngle = 0;
-                else if(e.x > lim) targetAngle = Math.PI;
-                else if(e.y < -lim) targetAngle = Math.PI/2;
-                else if(e.y > lim) targetAngle = -Math.PI/2;
-
-                // Move
+                if(e.x < -lim) targetAngle = 0; else if(e.x > lim) targetAngle = Math.PI;
+                if(e.y < -lim) targetAngle = Math.PI/2; else if(e.y > lim) targetAngle = -Math.PI/2;
+                
                 let diff = normalizeAngle(targetAngle - e.angle);
                 if(Math.abs(diff) < e.turnSpeed) e.angle = targetAngle;
                 else e.angle += diff > 0 ? e.turnSpeed : -e.turnSpeed;
                 
                 const s = e.speed;
                 e.x += Math.cos(e.angle)*s; e.y += Math.sin(e.angle)*s;
-                e.body.unshift({x: e.x, y: e.y});
-                while(e.body.length > e.length) e.body.pop();
-
-                // Eat
-                for(let i = state.food.length-1; i>=0; i--) {
-                    if(coll(e, state.food[i], e.width+10)) {
-                        state.food.splice(i, 1); e.length += 12;
-                    }
+                e.body.unshift({x: e.x, y: e.y}); while(e.body.length > e.length) e.body.pop();
+                for(let i = gameData.food.length-1; i>=0; i--) {
+                    if(coll(e, gameData.food[i], e.width+10)) { gameData.food.splice(i, 1); e.length += 12; }
                 }
-                // Collision with player
-                state.players.forEach(p => {
-                    if(!p.dead && p.active) {
-                        if(coll(p, e, p.scale+e.width)) killPlayer(p, null);
-                        // Body collision checks omitted for brevity in vanilla port, but can be added
-                        for(let i=5; i<p.body.length; i+=2) if(coll(e, p.body[i], p.scale+e.width)) killEnemy(e, p);
-                    }
+                gameData.players.forEach(p => {
+                    if(!p.dead && p.active && coll(p, e, p.scale+e.width)) killPlayer(p, null);
                 });
             });
         }
 
         function updateEnvironment(active) {
             const now = Date.now();
-            // Food respawn
             if(gameData.food.length < 400) {
                 for(let k=0; k<10; k++) {
-                    let l=1; while(l<100 && Math.random()<0.5)l++;
-                    gameData.food.push({x: randPosCell(), y: randPosCell(), level: l});
+                    let l=1; while(l<100 && Math.random()<0.5)l++; gameData.food.push({x: randPosCell(), y: randPosCell(), level: l});
                 }
             }
-            // Eat check
             gameData.food.forEach((f, i) => {
                 const rad = FOOD_RADIUS_BASE + f.level*1.5;
                 active.forEach(p => {
@@ -902,20 +493,16 @@
                     }
                 });
             });
-            // Mines
             for(let i=gameData.mines.length-1; i>=0; i--) {
                 let m = gameData.mines[i];
                 if(m.state === 'idle') {
-                    let trig = false;
-                    active.forEach(p => { if(!p.dead && dist(p, m) < 200) trig=true; });
+                    let trig = false; active.forEach(p => { if(!p.dead && dist(p, m) < 200) trig=true; });
                     if(trig) { m.state = 'triggered'; m.lastTick = now; }
                 } else if(m.state === 'triggered' && now - m.lastTick > m.timer*1000) {
-                    createExplosion(m.x, m.y);
-                    active.forEach(p => { if(!p.dead && dist(p, m) < 300) killPlayer(p, null); });
+                    createExplosion(m.x, m.y); active.forEach(p => { if(!p.dead && dist(p, m) < 300) killPlayer(p, null); });
                     gameData.mines.splice(i, 1);
                 }
             }
-            // Explosions fade
             for(let i=gameData.explosions.length-1; i>=0; i--) {
                 gameData.explosions[i].radius += 15; gameData.explosions[i].alpha -= 0.05;
                 if(gameData.explosions[i].alpha <= 0) gameData.explosions.splice(i, 1);
@@ -923,8 +510,7 @@
         }
 
         function createExplosion(x, y, r=10) {
-            gameData.explosions.push({x, y, radius: r, alpha: 1.0});
-            gameData.shakeIntensity = Math.min(100, gameData.shakeIntensity+30);
+            gameData.explosions.push({x, y, radius: r, alpha: 1.0}); gameData.shakeIntensity = Math.min(100, gameData.shakeIntensity+30);
         }
 
         function killPlayer(v, k) {
@@ -936,7 +522,6 @@
                 toggleUI('death');
             }
             createExplosion(v.x, v.y);
-            // Drop food
             const count = Math.max(3, Math.floor((v.length*0.4)/LENGTH_GAIN));
             for(let i=0; i<count; i++) {
                 const b = v.body[Math.floor(Math.random()*v.body.length)];
@@ -945,37 +530,33 @@
         }
         
         function killEnemy(e, killer) {
-            e.alive = false;
-            if(killer && killer.id === currentState.myPlayerIndex) updateStats({kill: true});
+            e.alive = false; if(killer && killer.id === currentState.myPlayerIndex) updateStats({kill: true});
             createExplosion(e.x, e.y);
-            // Drop food logic similar to player
         }
 
-        function compressState(state) {
-            return {
-                mode: state.mode, shakeIntensity: Math.round(state.shakeIntensity),
-                food: state.food.map(f => ({x:Math.round(f.x), y:Math.round(f.y), l:f.level, g:f.isGolden?1:0})),
-                mines: state.mines.map(m => ({x:Math.round(m.x), y:Math.round(m.y), state:m.state})),
-                explosions: state.explosions.map(e=>({x:Math.round(e.x), y:Math.round(e.y), radius:Math.round(e.radius), alpha: Number(e.alpha.toFixed(2))})),
-                players: state.players.map(p=>({
-                    id:p.id, active:p.active, dead:p.dead, x:Math.round(p.x), y:Math.round(p.y),
-                    angle: Number(p.angle.toFixed(2)), scale: Number(p.scale.toFixed(2)), length: Math.round(p.length),
-                    country: p.country, colorBody: p.colorBody, kills:p.kills, deaths:p.deaths, name: p.name
-                })),
-                enemies: state.enemies.map(e=>({alive:e.alive, color:e.color, width:Math.round(e.width), x:Math.round(e.x), y:Math.round(e.y)}))
-            };
+        // --- RENDER ---
+        function drawFlag(ctx, country, r, fallbackColor) {
+            const rect = (x,y,w,h,c) => { ctx.fillStyle=c; ctx.fillRect(x,y,w,h); };
+            if(!country) { ctx.fillStyle = fallbackColor || "white"; ctx.fillRect(-r,-r,r*2,r*2); return; }
+            if(country === 'bosnia') {
+                rect(-r,-r,r*2,r*2, "#002F6C"); ctx.fillStyle="#FECB00"; ctx.beginPath(); ctx.moveTo(r*0.2,-r); ctx.lineTo(r*0.2,r); ctx.lineTo(r,-r*0.5); ctx.fill();
+                ctx.fillStyle="white"; for(let i=0;i<5;i++) { ctx.beginPath(); ctx.arc(-r*0.2, -r*0.6+i*r*0.4, r*0.1, 0, Math.PI*2); ctx.fill(); }
+            } else if(country === 'usa') {
+                rect(-r,-r,r*2,r*2, "white"); for(let i=0;i<7;i++) rect(-r,-r+(i*2*r/7), r*2, r/7, "#B22234");
+                rect(-r,-r,r,r*0.8, "#3C3B6E"); ctx.fillStyle="white";
+                for(let py=0; py<3; py++) for(let px=0; px<4; px++) { ctx.beginPath(); ctx.arc(-r+5+px*(r/4), -r+5+py*(r/4), 2, 0, Math.PI*2); ctx.fill(); }
+            } else if(country === 'italy') { rect(-r,-r,r*2/3,r*2, "#008C45"); rect(-r+r*2/3,-r,r*2/3,r*2, "white"); rect(-r+2*r*2/3,-r,r*2/3,r*2, "#CD212A"); }
+            else if(country === 'poland') { rect(-r,-r,r*2,r, "white"); rect(-r,0,r*2,r, "#DC143C"); }
+            else if(country === 'germany') { rect(-r,-r,r*2,r*2/3, "black"); rect(-r,-r+r*2/3,r*2,r*2/3, "#DD0000"); rect(-r,-r+2*r*2/3,r*2,r*2/3, "#FFCC00"); }
+            else if(country === 'france') { rect(-r,-r,r*2/3,r*2, "#0055A4"); rect(-r+r*2/3,-r,r*2/3,r*2, "white"); rect(-r+2*r*2/3,-r,r*2/3,r*2, "#EF4135"); }
+            else if(country === 'soviet') { rect(-r,-r,r*2,r*2, "#CC0000"); ctx.fillStyle="#FFD700"; ctx.beginPath(); ctx.arc(0, -r*0.35, r*0.15, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle="#FFD700"; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-r*0.1, r*0.2); ctx.lineTo(r*0.1, -r*0.1); ctx.stroke(); }
+            else { rect(-r,-r,r*2,r*2, fallbackColor || "#333"); }
         }
 
-        // --- RENDER LOOP ---
         function loop(timestamp) {
             requestAnimationFrame(loop);
+            if(canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
             
-            // Resize Canvas
-            if(canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
-                canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-            }
-            
-            // Draw Background
             ctx.fillStyle = "#080b12"; ctx.fillRect(0,0,canvas.width,canvas.height);
             ctx.strokeStyle = "rgba(0, 47, 108, 0.2)"; ctx.lineWidth = 1;
             for(let i=0; i<canvas.width; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
@@ -983,51 +564,35 @@
 
             if(currentState.menu === 'start') return;
 
-            // Update Logic for Host
             if(currentState.isHost && !currentState.isSpectating) {
                 if(timestamp % 1000 < 16) updateStats({scale: gameData.players[0].scale, length: gameData.players[0].length});
                 updateSinglePlayer();
-                
-                // Networking broadcast
                 if(timestamp - lastSentTime > BROADCAST_RATE) {
                     const payload = { type: "STATE", state: compressState(gameData) };
                     connections.forEach(c => { if(c.open) c.send(payload); });
                     lastSentTime = timestamp;
                 }
-            } 
-            // Update Interpolation for Spectator
-            else if(currentState.isSpectating && serverState) {
-                // Quick lerp
+            } else if(currentState.isSpectating && serverState) {
                 const t = INTERPOLATION_SPEED;
                 gameData.players.forEach((p, i) => {
                     const tp = serverState.players[i];
                     if(tp) {
-                        p.x = lerp(p.x, tp.x, t); p.y = lerp(p.y, tp.y, t);
-                        p.angle = lerpAngle(p.angle, tp.angle, t);
-                        p.scale = tp.scale; p.country = tp.country; p.dead = tp.dead;
-                        p.name = tp.name;
-                        if(!p.body) p.body = [];
-                        p.body.unshift({x:p.x, y:p.y});
-                        while(p.body.length > tp.length) p.body.pop();
+                        p.x = lerp(p.x, tp.x, t); p.y = lerp(p.y, tp.y, t); p.angle = lerpAngle(p.angle, tp.angle, t);
+                        p.scale = tp.scale; p.country = tp.country; p.dead = tp.dead; p.name = tp.name;
+                        if(!p.body) p.body = []; p.body.unshift({x:p.x, y:p.y}); while(p.body.length > tp.length) p.body.pop();
                     }
                 });
                 gameData.food = serverState.food.map(f=>({x:f.x, y:f.y, level:f.l, isGolden: f.g===1}));
-                gameData.mines = serverState.mines;
-                gameData.explosions = serverState.explosions;
+                gameData.mines = serverState.mines; gameData.explosions = serverState.explosions;
             }
 
-            // HUD Updates
+            // Draw
             const me = gameData.players[0] || {};
             document.getElementById('hud-size').innerText = "Size: " + (me.scale||18).toFixed(1);
             document.getElementById('hud-kills').innerText = "Kills: " + (me.kills||0);
 
-            // Camera
             let sx=0, sy=0;
-            if(gameData.shakeIntensity > 0) {
-                sx = (Math.random()-0.5)*gameData.shakeIntensity;
-                sy = (Math.random()-0.5)*gameData.shakeIntensity;
-                gameData.shakeIntensity *= 0.9;
-            }
+            if(gameData.shakeIntensity > 0) { sx = (Math.random()-0.5)*gameData.shakeIntensity; sy = (Math.random()-0.5)*gameData.shakeIntensity; gameData.shakeIntensity *= 0.9; }
             
             ctx.save();
             ctx.translate(canvas.width/2 + sx, canvas.height/2 + sy);
@@ -1035,141 +600,70 @@
             ctx.scale(zoom, zoom);
             ctx.translate(-me.x, -me.y);
 
-            // World Border
-            ctx.lineWidth=12; ctx.strokeStyle="rgba(255,0,0,0.9)";
-            ctx.strokeRect(-WORLD_SIZE/2, -WORLD_SIZE/2, WORLD_SIZE, WORLD_SIZE);
+            ctx.lineWidth=12; ctx.strokeStyle="rgba(255,0,0,0.9)"; ctx.strokeRect(-WORLD_SIZE/2, -WORLD_SIZE/2, WORLD_SIZE, WORLD_SIZE);
 
-            // Draw Food
             gameData.food.forEach(f => {
-                const s = FOOD_RADIUS_BASE + f.level*1.5;
-                ctx.fillStyle = f.isGolden ? "#FFD700" : "orange";
+                const s = FOOD_RADIUS_BASE + f.level*1.5; ctx.fillStyle = f.isGolden ? "#FFD700" : "orange";
                 ctx.beginPath(); ctx.arc(f.x, f.y, s, 0, Math.PI*2); ctx.fill();
             });
-
-            // Draw Mines
             gameData.mines.forEach(m => {
-                ctx.strokeStyle = m.state === 'triggered' ? 'red' : '#333';
-                ctx.lineWidth = 2;
+                ctx.strokeStyle = m.state === 'triggered' ? 'red' : '#333'; ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.arc(m.x, m.y, 25, 0, Math.PI*2); ctx.stroke();
-                // Simple mine art
                 ctx.fillStyle = "#C6363C"; ctx.beginPath(); ctx.arc(m.x, m.y, 24, 0, Math.PI*2); ctx.fill();
                 ctx.fillStyle = "white"; ctx.fillRect(m.x-5, m.y-5, 10, 10);
             });
-
-            // Draw Players
             gameData.players.concat(gameData.enemies).forEach(p => {
                 if(p.dead || (p.alive===false)) return;
-                
-                // Body
-                ctx.strokeStyle = p.colorBody || p.color || "white";
-                ctx.lineWidth = (p.scale || p.width) * 1.2;
+                ctx.strokeStyle = p.colorBody || p.color || "white"; ctx.lineWidth = (p.scale || p.width) * 1.2;
                 ctx.lineCap = "round"; ctx.lineJoin = "round";
-                ctx.beginPath();
-                if(p.body.length) {
-                    ctx.moveTo(p.body[0].x, p.body[0].y);
-                    p.body.forEach(b => ctx.lineTo(b.x, b.y));
-                    ctx.stroke();
-                }
-
-                // Head
+                ctx.beginPath(); if(p.body.length) { ctx.moveTo(p.body[0].x, p.body[0].y); p.body.forEach(b => ctx.lineTo(b.x, b.y)); ctx.stroke(); }
                 const r = (p.scale || p.width) * 0.65;
-                ctx.save();
-                ctx.translate(p.x, p.y);
-                ctx.rotate(p.angle + Math.PI/2);
+                ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle + Math.PI/2);
                 ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.clip();
-                
                 drawFlag(ctx, p.country, r, p.color);
-                
                 ctx.restore();
             });
-
-            // Draw Explosions
             gameData.explosions.forEach(ex => {
-                ctx.fillStyle = `rgba(255,69,0,${ex.alpha})`;
-                ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = `rgba(255,69,0,${ex.alpha})`; ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius, 0, Math.PI*2); ctx.fill();
             });
-
             ctx.restore();
         }
 
-        // --- DRAWING FLAGS ---
-        function drawFlag(ctx, country, r, fallbackColor) {
-            // Helper for rectangle stripes
-            const rect = (x,y,w,h,c) => { ctx.fillStyle=c; ctx.fillRect(x,y,w,h); };
-            
-            if(!country) { ctx.fillStyle = fallbackColor || "white"; ctx.fillRect(-r,-r,r*2,r*2); return; }
-
-            if(country === 'bosnia') {
-                rect(-r,-r,r*2,r*2, "#002F6C");
-                ctx.fillStyle="#FECB00"; ctx.beginPath(); ctx.moveTo(r*0.2,-r); ctx.lineTo(r*0.2,r); ctx.lineTo(r,-r*0.5); ctx.fill();
-                ctx.fillStyle="white"; 
-                for(let i=0;i<5;i++) { ctx.beginPath(); ctx.arc(-r*0.2, -r*0.6+i*r*0.4, r*0.1, 0, Math.PI*2); ctx.fill(); }
-            }
-            else if(country === 'usa') {
-                rect(-r,-r,r*2,r*2, "white");
-                for(let i=0;i<7;i++) rect(-r,-r+(i*2*r/7), r*2, r/7, "#B22234"); // Stripes
-                rect(-r,-r,r,r*0.8, "#3C3B6E"); // Canton
-                ctx.fillStyle="white";
-                for(let py=0; py<3; py++) for(let px=0; px<4; px++) {
-                    ctx.beginPath(); ctx.arc(-r+5+px*(r/4), -r+5+py*(r/4), 2, 0, Math.PI*2); ctx.fill();
-                }
-            }
-            else if(country === 'italy') {
-                rect(-r,-r,r*2/3,r*2, "#008C45");
-                rect(-r+r*2/3,-r,r*2/3,r*2, "white");
-                rect(-r+2*r*2/3,-r,r*2/3,r*2, "#CD212A");
-            }
-            else if(country === 'poland') {
-                rect(-r,-r,r*2,r, "white");
-                rect(-r,0,r*2,r, "#DC143C");
-            }
-            else if(country === 'germany') {
-                rect(-r,-r,r*2,r*2/3, "black");
-                rect(-r,-r+r*2/3,r*2,r*2/3, "#DD0000");
-                rect(-r,-r+2*r*2/3,r*2,r*2/3, "#FFCC00");
-            }
-            else if(country === 'france') {
-                rect(-r,-r,r*2/3,r*2, "#0055A4");
-                rect(-r+r*2/3,-r,r*2/3,r*2, "white");
-                rect(-r+2*r*2/3,-r,r*2/3,r*2, "#EF4135");
-            }
-            else if(country === 'sweden') {
-                rect(-r,-r,r*2,r*2, "#006AA7");
-                rect(-r,-r*0.2,r*2,r*0.4, "#FECC00");
-                rect(-r*0.2,-r,r*0.4,r*2, "#FECC00");
-            }
-            else if(country === 'denmark') {
-                rect(-r,-r,r*2,r*2, "#C60C30");
-                rect(-r,-r*0.2,r*2,r*0.4, "white");
-                rect(-r*0.2,-r,r*0.4,r*2, "white");
-            }
-            else if(country === 'uk') {
-                rect(-r,-r,r*2,r*2, "#012169");
-                rect(-r,-r*0.3,r*2,r*0.6, "white"); // Cross vert/horz
-                rect(-r*0.3,-r,r*0.6,r*2, "white");
-                rect(-r,-r*0.15,r*2,r*0.3, "#C8102E"); // Red cross
-                rect(-r*0.15,-r,r*0.3,r*2, "#C8102E");
-            }
-            else if(country === 'canada') {
-                rect(-r,-r,r*2,r*2, "white");
-                rect(-r,-r,r*0.5,r*2, "#FF0000");
-                rect(r*0.5,-r,r*0.5,r*2, "#FF0000");
-                // Leaf
-                ctx.fillStyle = "#FF0000"; ctx.beginPath(); ctx.arc(0, 0, r*0.4, 0, Math.PI*2); ctx.fill();
-            }
-            else if(country === 'soviet') {
-                rect(-r,-r,r*2,r*2, "#CC0000");
-                ctx.fillStyle="#FFD700"; ctx.beginPath(); ctx.arc(0, -r*0.35, r*0.15, 0, Math.PI*2); ctx.fill();
-                ctx.strokeStyle="#FFD700"; ctx.lineWidth=2;
-                ctx.beginPath(); ctx.moveTo(-r*0.1, r*0.2); ctx.lineTo(r*0.1, -r*0.1); ctx.stroke();
-            }
-            else {
-                rect(-r,-r,r*2,r*2, fallbackColor || "#333");
-            }
+        // COMPRESSION
+        function compressState(s) {
+            return {
+                mode: s.mode, shakeIntensity: Math.round(s.shakeIntensity),
+                food: s.food.map(f => ({x:Math.round(f.x), y:Math.round(f.y), l:f.level, g:f.isGolden?1:0})),
+                mines: s.mines.map(m => ({x:Math.round(m.x), y:Math.round(m.y), state:m.state})),
+                explosions: s.explosions.map(e=>({x:Math.round(e.x), y:Math.round(e.y), radius:Math.round(e.radius), alpha: Number(e.alpha.toFixed(2))})),
+                players: s.players.map(p=>({ id:p.id, active:p.active, dead:p.dead, x:Math.round(p.x), y:Math.round(p.y), angle: Number(p.angle.toFixed(2)), scale: Number(p.scale.toFixed(2)), length: Math.round(p.length), country: p.country, colorBody: p.colorBody, kills:p.kills, deaths:p.deaths, name: p.name })),
+                enemies: s.enemies.map(e=>({alive:e.alive, color:e.color, width:Math.round(e.width), x:Math.round(e.x), y:Math.round(e.y)}))
+            };
         }
 
+        function broadcastChat(msg) { connections.forEach(c => { if(c.open) c.send({type:"CHAT_MSG", msg}); }); }
+        function addChatMessage(name, text, color) {
+            const container = document.getElementById('chat-messages'); const el = document.createElement('div');
+            el.className = 'chat-line'; el.innerHTML = `<span style="color:${color}; font-weight:bold;">${name}: </span>${text}`;
+            container.appendChild(el); if(container.children.length > 8) container.removeChild(container.firstChild);
+        }
 
-        // --- UI EVENT HANDLING ---
+        // UI HELPERS
+        function updateStatsUI() {
+            document.getElementById('stat-kills').innerText = userStats.totalKills; document.getElementById('stat-deaths').innerText = userStats.totalDeaths;
+            document.getElementById('stat-best-size').innerText = userStats.bestScale.toFixed(1); document.getElementById('stat-games').innerText = userStats.gamesPlayed;
+        }
+        function renderSkinGrid() {
+            const grid = document.getElementById('skin-grid'); grid.innerHTML = '';
+            const list = currentState.skinCategory === 'normal' ? SKINS_NORMAL : SKINS_SPECIAL;
+            list.forEach(skin => {
+                const unlocked = isSkinUnlocked(skin); const req = UNLOCK_CRITERIA[skin];
+                const div = document.createElement('div'); div.className = `skin-tile ${currentState.selectedSkin === skin ? 'selected' : ''} ${!unlocked ? 'locked' : ''}`;
+                div.innerHTML = `<div class="skin-color-dot" style="background: ${SKIN_BODY_COLORS[skin]}"></div><div style="font-size: 12px; font-weight: bold; text-transform: capitalize; color: ${unlocked ? 'white' : '#888'}">${skin.replace('_', ' ')}</div>${!unlocked ? `<div class="lock-text">🔒 ${req.label}</div>` : ''}`;
+                div.onclick = () => { if (unlocked) { currentState.selectedSkin = skin; renderSkinGrid(); } };
+                grid.appendChild(div);
+            });
+        }
         function toggleUI(mode) {
             document.getElementById('menu-container').style.display = mode === 'start' ? 'flex' : 'none';
             document.getElementById('hud').style.display = mode === 'playing' && !currentState.isSpectating ? 'flex' : 'none';
@@ -1178,125 +672,37 @@
             document.getElementById('spectator-label').style.display = currentState.isSpectating ? 'block' : 'none';
         }
 
-        // --- DOM LISTENERS ---
-        document.getElementById('btn-play').addEventListener('click', () => {
-            initSinglePlayer();
-        });
-
-        document.getElementById('btn-mouse').addEventListener('click', () => {
-            currentState.controlMode = 'mouse';
-            document.getElementById('btn-mouse').classList.add('active');
-            document.getElementById('btn-keyboard').classList.remove('active');
-        });
-
-        document.getElementById('btn-keyboard').addEventListener('click', () => {
-            currentState.controlMode = 'keyboard';
-            document.getElementById('btn-keyboard').classList.add('active');
-            document.getElementById('btn-mouse').classList.remove('active');
-        });
-
-        document.getElementById('cat-normal').addEventListener('click', () => {
-            currentState.skinCategory = 'normal';
-            document.getElementById('cat-normal').classList.add('active');
-            document.getElementById('cat-special').classList.remove('active');
-            renderSkinGrid();
-        });
-
-        document.getElementById('cat-special').addEventListener('click', () => {
-            currentState.skinCategory = 'special';
-            document.getElementById('cat-special').classList.add('active');
-            document.getElementById('cat-normal').classList.remove('active');
-            renderSkinGrid();
-        });
-
-        document.getElementById('nickname-input').addEventListener('input', (e) => {
-            currentState.playerName = e.target.value;
-            localStorage.setItem('bosnia_snake_username', e.target.value);
-        });
-        document.getElementById('nickname-input').value = currentState.playerName;
-
-        document.getElementById('btn-redeem').addEventListener('click', () => {
-            const code = document.getElementById('redeem-input').value;
-            if(code === "Ireland_isgreat") {
-                updateStats({unlockSecret: "ireland"});
-                alert("Ireland Unlocked!");
-            } else alert("Invalid");
-        });
-
-        document.getElementById('chat-input').addEventListener('keydown', (e) => {
-            if(e.key === 'Enter') {
-                const text = e.target.value;
-                if(text.trim()) {
-                    if(currentState.isHost) {
-                        const msg = {name: currentState.playerName, text: text, color: "#FECB00"};
-                        addChatMessage(msg.name, msg.text, msg.color);
-                        playSound("chat");
-                        broadcastChat(msg);
-                    } else if(hostConn && hostConn.open) {
-                        hostConn.send({type: "CHAT", name: currentState.playerName, text: text});
-                        addChatMessage(currentState.playerName, text, "#fff");
-                    }
-                }
-                e.target.value = '';
-            }
-        });
-
-        function broadcastChat(msg) {
-            connections.forEach(c => { if(c.open) c.send({type:"CHAT_MSG", msg}); });
-        }
-
-        function addChatMessage(name, text, color) {
-            const container = document.getElementById('chat-messages');
-            const el = document.createElement('div');
-            el.className = 'chat-line';
-            el.innerHTML = `<span style="color:${color}; font-weight:bold;">${name}: </span>${text}`;
-            container.appendChild(el);
-            if(container.children.length > 8) container.removeChild(container.firstChild);
-        }
-
         async function submitScoreToLeaderboard(scale) {
-            const size = parseFloat(scale.toFixed(2));
-            if(size < 20) return;
+            const size = parseFloat(scale.toFixed(2)); if(size < 20) return;
             try {
-                const lbRef = collection(db, "leaderboard");
-                const q = query(lbRef, where("name", "==", currentState.playerName));
+                const lbRef = collection(db, "leaderboard"); const q = query(lbRef, where("name", "==", currentState.playerName));
                 const snap = await getDocs(q);
                 if(snap.empty) await addDoc(lbRef, {name: currentState.playerName, size: size, timestamp: serverTimestamp()});
-                else {
-                    const d = snap.docs[0];
-                    if(size > d.data().size) updateDoc(doc(db, "leaderboard", d.id), {size: size});
-                }
+                else { const d = snap.docs[0]; if(size > d.data().size) updateDoc(doc(db, "leaderboard", d.id), {size: size}); }
             } catch(e) { console.error("LB Error", e); }
         }
 
         async function startScanner() {
-            // Leaderboard
             onSnapshot(query(collection(db, "leaderboard"), orderBy("size", "desc"), limit(5)), (snap) => {
-                const div = document.getElementById('leaderboard-content');
-                div.innerHTML = '';
+                const div = document.getElementById('leaderboard-content'); div.innerHTML = '';
                 snap.forEach((d, i) => {
-                    const r = document.createElement('div');
-                    r.className = 'row';
+                    const r = document.createElement('div'); r.className = 'row';
                     r.innerHTML = `<span style="color:${i===0?'#FECB00':'white'}">${i+1}. ${d.data().name}</span> <span style="color:#4caf50">${Math.round(d.data().size)}</span>`;
                     div.appendChild(r);
                 });
             });
-
-            // Live Games Scanner
             setInterval(async () => {
                 const q = query(collection(db, "active_games"), orderBy("lastBeat", "desc"), limit(20));
                 const snap = await getDocs(q);
-                const list = document.getElementById('spectate-list');
-                list.innerHTML = '';
+                const list = document.getElementById('spectate-list'); list.innerHTML = '';
                 document.getElementById('scan-status').innerText = "";
-                const now = Date.now();
                 let found = 0;
+                const now = Date.now();
                 snap.forEach(doc => {
                     const data = doc.data();
                     if(data.lastBeat && (now - data.lastBeat.toMillis() < 30000)) {
                         found++;
-                        const row = document.createElement('div');
-                        row.className = 'spectate-row';
+                        const row = document.createElement('div'); row.className = 'spectate-row';
                         row.innerHTML = `<div><b>${data.host}</b></div><div style="background:#28a745; padding:3px 6px; border-radius:3px; font-size:10px;">WATCH</div>`;
                         row.onclick = () => initSpectate(doc.id);
                         list.appendChild(row);
@@ -1306,20 +712,29 @@
             }, 5000);
         }
 
-        // Input Listeners
-        window.addEventListener('keydown', e => {
-            keys[e.key.toLowerCase()] = true;
-            if(audioCtx.state === 'suspended') audioCtx.resume();
-        });
-        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-        window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+        // LISTENERS
+        document.getElementById('btn-play').onclick = initSinglePlayer;
+        document.getElementById('btn-mouse').onclick = () => { currentState.controlMode = 'mouse'; document.getElementById('btn-mouse').classList.add('active'); document.getElementById('btn-keyboard').classList.remove('active'); };
+        document.getElementById('btn-keyboard').onclick = () => { currentState.controlMode = 'keyboard'; document.getElementById('btn-keyboard').classList.add('active'); document.getElementById('btn-mouse').classList.remove('active'); };
+        document.getElementById('cat-normal').onclick = () => { currentState.skinCategory = 'normal'; document.getElementById('cat-normal').classList.add('active'); document.getElementById('cat-special').classList.remove('active'); renderSkinGrid(); };
+        document.getElementById('cat-special').onclick = () => { currentState.skinCategory = 'special'; document.getElementById('cat-special').classList.add('active'); document.getElementById('cat-normal').classList.remove('active'); renderSkinGrid(); };
+        document.getElementById('nickname-input').oninput = (e) => { currentState.playerName = e.target.value; localStorage.setItem('bosnia_snake_username', e.target.value); };
+        document.getElementById('nickname-input').value = currentState.playerName;
+        document.getElementById('btn-redeem').onclick = () => { if(document.getElementById('redeem-input').value === "Ireland_isgreat") { updateStats({unlockSecret: "ireland"}); alert("Ireland Unlocked!"); } else alert("Invalid"); };
+        document.getElementById('chat-input').onkeydown = (e) => {
+            if(e.key === 'Enter' && e.target.value.trim()) {
+                const text = e.target.value;
+                if(currentState.isHost) { const msg = {name: currentState.playerName, text: text, color: "#FECB00"}; addChatMessage(msg.name, msg.text, msg.color); playSound("chat"); broadcastChat(msg); }
+                else if(hostConn && hostConn.open) { hostConn.send({type: "CHAT", name: currentState.playerName, text: text}); addChatMessage(currentState.playerName, text, "#fff"); }
+                e.target.value = '';
+            }
+        };
+        window.onkeydown = e => { keys[e.key.toLowerCase()] = true; if(audioCtx.state === 'suspended') audioCtx.resume(); };
+        window.onkeyup = e => keys[e.key.toLowerCase()] = false;
+        window.onmousemove = e => { mouse.x = e.clientX; mouse.y = e.clientY; };
 
-        // Init
-        updateStatsUI();
-        renderSkinGrid();
-        requestAnimationFrame(loop);
-
+        // START
+        updateStatsUI(); renderSkinGrid(); requestAnimationFrame(loop);
     </script>
 </body>
 </html>
-
