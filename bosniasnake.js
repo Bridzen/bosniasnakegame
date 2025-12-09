@@ -1,3 +1,5 @@
+--- START OF FILE bosniasnake.js ---
+
 import React, { useEffect, useRef, useState } from "react";
 import Peer from "peerjs";
 
@@ -125,25 +127,23 @@ const BROADCAST_RATE = 50;
 const INTERPOLATION_SPEED = 0.2;
 
 // --- SKIN CONFIGURATION ---
-// UPDATED: Added new countries here
 const SKINS_NORMAL = [
   "bosnia",
-  "italy", // New
-  "poland", // New
+  "italy",
+  "poland",
   "france",
   "germany",
   "ukraine",
-  "sweden", // New
-  "denmark", // New
-  "uk", // New
-  "usa", // New
+  "sweden",
+  "denmark",
+  "uk",
+  "usa",
   "russia",
   "canada",
 ];
 const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple"];
 const ALL_SKINS = [...SKINS_NORMAL, ...SKINS_SPECIAL];
 
-// UPDATED: Body colors for new skins
 const SKIN_BODY_COLORS = {
   bosnia: "#002F6C",
   russia: "#FFFFFF",
@@ -154,40 +154,28 @@ const SKIN_BODY_COLORS = {
   ireland: "#169B62",
   soviet: "#CC0000",
   golden_maple: "#DAA520",
-  // New Colors
-  usa: "#3C3B6E", // Navy Blue
-  denmark: "#C60C30", // Danish Red
-  sweden: "#006AA7", // Swedish Blue
-  poland: "#DC143C", // Crimson
-  italy: "#008C45", // Green
-  uk: "#012169", // Royal Blue
+  usa: "#3C3B6E",
+  denmark: "#C60C30",
+  sweden: "#006AA7",
+  poland: "#DC143C",
+  italy: "#008C45",
+  uk: "#012169",
 };
 
 // --- UNLOCK CRITERIA ---
-// UPDATED: Creative unlock requirements
 const UNLOCK_CRITERIA = {
   bosnia: { type: "default", label: "Default" },
-  italy: { type: "default", label: "Default" }, // Italy is free
-
-  // Basic Progress
+  italy: { type: "default", label: "Default" },
   germany: { type: "scale", val: 40, label: "Reach Size 40" },
   france: { type: "deaths", val: 5, label: "Die 5 Times" },
-
-  // Nordic Unlocks (Viking Theme)
   sweden: { type: "kills", val: 10, label: "Get 10 Kills" },
   denmark: { type: "kills", val: 25, label: "Get 25 Kills" },
-
-  // Specific Stats
-  poland: { type: "deaths", val: 15, label: "Die 15 Times" }, // History reference
-  uk: { type: "length", val: 800, label: "Reach Length 800" }, // Empire expansion
-
-  // High Tier
+  poland: { type: "deaths", val: 15, label: "Die 15 Times" },
+  uk: { type: "length", val: 800, label: "Reach Length 800" },
   ukraine: { type: "games", val: 5, label: "Play 5 Games" },
   canada: { type: "length", val: 1000, label: "Reach Length 1k" },
   russia: { type: "scale", val: 50, label: "Reach Size 50" },
-  usa: { type: "scale", val: 75, label: "Reach Size 75" }, // Superpower size
-
-  // Specials
+  usa: { type: "scale", val: 75, label: "Reach Size 75" },
   ireland: { type: "code", label: "Secret Code" },
   soviet: { type: "custom_soviet", label: "Russia + Size 500 + 50 Kills" },
   golden_maple: {
@@ -510,10 +498,23 @@ export default function BosniaSnakeFixedRuntime() {
       mouse.current.x = e.clientX;
       mouse.current.y = e.clientY;
     };
+    const handleMouseDown = (e) => {
+      // Click to Respawn Logic
+      const me = gameState.current.players[myPlayerIndex];
+      if (me && me.dead && menuState === "playing" && !isSpectating) {
+        resetWorld(true);
+      }
+    };
     const handleTouchStart = (e) => {
       if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
       mouse.current.x = e.touches[0].clientX;
       mouse.current.y = e.touches[0].clientY;
+
+      // Touch to Respawn Logic
+      const me = gameState.current.players[myPlayerIndex];
+      if (me && me.dead && menuState === "playing" && !isSpectating) {
+        resetWorld(true);
+      }
     };
     const handleTouchMove = (e) => {
       mouse.current.x = e.touches[0].clientX;
@@ -524,17 +525,19 @@ export default function BosniaSnakeFixedRuntime() {
     window.addEventListener("keydown", handleDown);
     window.addEventListener("keyup", handleUp);
     window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("touchstart", handleTouchStart, { passive: false });
     window.addEventListener("touchmove", handleTouchMove, { passive: false });
     return () => {
       window.removeEventListener("keydown", handleDown);
       window.removeEventListener("keyup", handleUp);
       window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchmove", handleTouchMove);
       if (peerRef.current) peerRef.current.destroy();
     };
-  }, [showOwnerPanel]);
+  }, [showOwnerPanel, menuState, isSpectating, myPlayerIndex]);
 
   const getLocalInput = () => {
     if (isSpectating)
@@ -616,6 +619,8 @@ export default function BosniaSnakeFixedRuntime() {
       x: Math.round(m.x),
       y: Math.round(m.y),
       state: m.state,
+      lastTick: m.lastTick,
+      timer: m.timer,
     })),
     explosions: state.explosions.map((e) => ({
       x: Math.round(e.x),
@@ -964,79 +969,96 @@ export default function BosniaSnakeFixedRuntime() {
     });
   }
 
-for (let i = state.food.length - 1; i >= 0; i--) {
-        if (coll(enemy, state.food[i], enemy.width + 10)) {
-          state.food.splice(i, 1);
-          enemy.length += 12;
-          // FIX: Grow width when eating
-          enemy.width = Math.min(35, enemy.width + 0.5);
-        }
+  function updateSinglePlayer() {
+    const state = gameState.current;
+    const p = state.players[0];
+    if (p && p.dead) {
+      if (keys.current["r"]) resetWorld(true);
+      return;
+    }
+
+    state.enemies = state.enemies.filter((e) => e.alive);
+    if (state.enemies.length < MAX_ENEMIES && Math.random() < 0.02)
+      spawnOneEnemy();
+
+    const inp = getLocalInput();
+    if (p) handlePhysics(p, inp);
+    updateAI();
+    if (p) updateEnvironment([p]);
+  }
+
+  function updateSpectatorInterpolation() {
+    if (!serverState.current) return;
+    const cur = gameState.current;
+    const tar = serverState.current;
+
+    cur.food = tar.food.map((f) => ({
+      x: f.x,
+      y: f.y,
+      level: f.l,
+      isGolden: f.g === 1,
+    }));
+    cur.mines = tar.mines.map((m) => ({
+      ...m,
+      lastTick: m.lastTick || Date.now(),
+      timer: m.timer || 3,
+    }));
+    cur.explosions = tar.explosions;
+    cur.syrupZones = (tar.syrupZones || []).map((s) => ({
+      x: s.x,
+      y: s.y,
+      radius: s.radius,
+      ownerId: s.oid,
+    }));
+    cur.shakeIntensity = tar.shakeIntensity;
+
+    if (cur.enemies.length !== tar.enemies.length)
+      cur.enemies = tar.enemies.map((e) => ({ ...e, body: [] }));
+    cur.enemies.forEach((e, i) => {
+      const tE = tar.enemies[i];
+      if (!tE) return;
+      e.x = lerp(e.x, tE.x, INTERPOLATION_SPEED);
+      e.y = lerp(e.y, tE.y, INTERPOLATION_SPEED);
+      e.alive = tE.alive;
+      e.color = tE.color;
+      e.width = tE.width;
+      e.frozenUntil = tE.frozenUntil;
+      if (!e.body) e.body = [];
+      if (e.alive) {
+        e.body.unshift({ x: e.x, y: e.y });
+        while (e.body.length > 140) e.body.pop();
       }
-                    resetWorld(true);
-                    toggleUI('playing'); // <--- This line hides the death screen
-                }
-                return; 
-            }
-            
-            gameData.enemies = gameData.enemies.filter(e => e.alive);
-            if(gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.02) spawnOneEnemy();
-            
-            const now = Date.now();
-            const sprint = keys['shift'] || keys['/'];
-            const triggerAbility = keys['e'];
-            let targetAngle = null;
-            if(currentState.controlMode === 'mouse') targetAngle = Math.atan2(mouse.y - canvas.height/2, mouse.x - canvas.width/2);
-            else {
-                let dx=0, dy=0;
-                if(keys['w'] || keys['arrowup']) dy-=1; if(keys['s'] || keys['arrowdown']) dy+=1;
-                if(keys['a'] || keys['arrowleft']) dx-=1; if(keys['d'] || keys['arrowright']) dx+=1;
-                if(dx!==0 || dy!==0) targetAngle = Math.atan2(dy, dx);
-            }
+    });
 
-            if(p.country === 'soviet') {
-                if(sprint && !p.barrageActive && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000)) {
-                    p.barrageActive = true; p.barrageEndTime = now + 2000; p.nextExplosionTime = now; p.abilityActive = true;
-                }
-                if(p.barrageActive) {
-                    if(now >= p.barrageEndTime) { p.barrageActive = false; p.abilityActive = false; p.sovietBoost = false; p.lastAbilityTime = now; }
-                    else {
-                        p.sovietBoost = true;
-                        if(now >= p.nextExplosionTime) {
-                            createExplosion(p.x, p.y, 3 * CELL); gameData.shakeIntensity = Math.min(60, gameData.shakeIntensity+10);
-                            p.nextExplosionTime = now + 200; playSound("soviet_boom");
-                            gameData.enemies.forEach(e => { if(e.alive && dist(e, p) < 3*CELL) killEnemy(e, p); });
-                        }
-                    }
-                }
-            } else if(p.country === 'golden_maple') {
-                if(triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000) && !p.maplePhase) {
-                    p.maplePhase = 'harvest'; p.phaseEndTime = now + 2500; p.lastAbilityTime = now; playSound("angelic");
-                }
-                if(p.maplePhase === 'harvest' && now > p.phaseEndTime) {
-                    p.maplePhase = 'syrup'; p.phaseEndTime = now + 5000;
-                    gameData.syrupZones.push({x:p.x, y:p.y, radius:6*CELL, expiresAt: now+5000, ownerId: p.id});
-                } else if(p.maplePhase === 'syrup' && now > p.phaseEndTime) p.maplePhase = null;
-            }
+    if (cur.players.length !== tar.players.length)
+      cur.players = tar.players.map((p) => ({ ...p, body: [] }));
 
-            let speedMult = 1.0;
-            gameData.syrupZones.forEach(z => { if(dist(p, z) < z.radius && z.ownerId !== p.id) speedMult=0.4; });
-
-            if(targetAngle !== null) {
-                let d = normalizeAngle(targetAngle - p.angle);
-                if(Math.abs(d) < TURN_SPEED) p.angle = targetAngle;
-                else p.angle += d > 0 ? TURN_SPEED : -TURN_SPEED;
-                p.angle = normalizeAngle(p.angle);
-            }
-
-            let s = BASE_SPEED * speedMult;
-            if(sprint && p.length > MIN_LENGTH && (!p.abilityActive || p.country === 'soviet')) { s *= 1.8; if(p.sovietBoost) s*=2.0; p.length -= SPRINT_COST; }
-            p.x += Math.cos(p.angle)*s; p.y += Math.sin(p.angle)*s;
-            if(Math.abs(p.x) > WORLD_SIZE/2 || Math.abs(p.y) > WORLD_SIZE/2) killPlayer(p, null);
-            p.body.unshift({x: p.x, y: p.y}); while(p.body.length > p.length) p.body.pop();
-
-            updateAI();
-            updateEnvironment([p]);
-        }
+    cur.players.forEach((p, i) => {
+      const tP = tar.players[i];
+      if (!tP) return;
+      p.x = lerp(p.x, tP.x, INTERPOLATION_SPEED);
+      p.y = lerp(p.y, tP.y, INTERPOLATION_SPEED);
+      p.angle = lerpAngle(p.angle, tP.angle, INTERPOLATION_SPEED);
+      p.dead = tP.dead;
+      p.scale = tP.scale;
+      p.length = tP.length;
+      p.kills = tP.kills;
+      p.deaths = tP.deaths;
+      p.frozenUntil = tP.frozenUntil;
+      p.abilityActive = tP.abilityActive;
+      p.maplePhase = tP.maplePhase;
+      p.name = tP.name;
+      if (!p.body) p.body = [];
+      if (!p.dead) {
+        p.body.unshift({ x: p.x, y: p.y });
+        while (p.body.length > p.length) p.body.pop();
+      } else {
+        p.body = [];
+      }
+      p.country = tP.country;
+      p.colorBody = tP.colorBody;
+    });
+  }
 
   function handlePhysics(p, inp) {
     if (p.frozenUntil > Date.now()) return;
@@ -1126,44 +1148,42 @@ for (let i = state.food.length - 1; i >= 0; i--) {
 
     let s = BASE_SPEED * speedMult;
     if (p.id === myPlayerIndex && cheats.current.speedHack) s = BASE_SPEED * 3;
-// FIX: SERBIA MINES & WARNINGS
-    state.mines.forEach((m) => {
-      const isTriggered = m.state === 'triggered';
-      
-      // 1. Draw Warning Radius (Blinking Red)
-      if(isTriggered) {
-          const pulse = (Math.sin(Date.now() / 50) + 1) / 2; // Fast blinking
-          ctx.fillStyle = `rgba(255, 0, 0, ${0.2 + pulse * 0.3})`;
-          ctx.beginPath(); 
-          ctx.arc(m.x, m.y, 100 + pulse * 20, 0, Math.PI*2); 
-          ctx.fill();
-          ctx.strokeStyle = `rgba(255, 0, 0, ${0.8})`;
-          ctx.lineWidth = 2;
-          ctx.stroke();
-      }
 
-      // 2. Draw Serbia Flag Mine body
-      const r = 25;
-      ctx.save();
-      ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI*2); ctx.clip();
-      
-      // Stripes
-      ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x-r, m.y-r, r*2, 17); // Red
-      ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x-r, m.y-8, r*2, 16);  // Blue
-      ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x-r, m.y+8, r*2, 17);   // White
-      
-      // Simple Coat of Arms (Goldish shape on left)
-      ctx.fillStyle = "#D4AF37"; 
-      ctx.beginPath(); ctx.arc(m.x-8, m.y, 8, 0, Math.PI*2); ctx.fill();
-      
-      ctx.restore();
+    const canSprint =
+      inp.sprint &&
+      p.length > MIN_LENGTH &&
+      (!p.abilityActive || p.country === "soviet");
+    if (canSprint) {
+      s *= 1.8;
+      if (p.sovietBoost) s *= 2.0;
+      p.length -= SPRINT_COST;
+    }
 
-      // 3. Outline
-      ctx.strokeStyle = isTriggered ? 'red' : '#333';
-      ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI*2); ctx.stroke();
-    });
-        12 + Math.min(33, (enemy.length - 140) / 10);
+    p.x += Math.cos(p.angle) * s;
+    p.y += Math.sin(p.angle) * s;
+    if (Math.abs(p.x) > WORLD_SIZE / 2 || Math.abs(p.y) > WORLD_SIZE / 2)
+      killPlayer(p, null);
+    p.body.unshift({ x: p.x, y: p.y });
+    while (p.body.length > p.length) p.body.pop();
+  }
+
+  function updateAI() {
+    const state = gameState.current;
+    const viewDist = 500;
+    const now = Date.now();
+    const TRIGGER_DIST = 5 * CELL;
+    const RESET_DIST = 8 * CELL;
+    const TRIGGER_TIME = 3000;
+    const RESET_TIME = 2000;
+
+    state.enemies.forEach((enemy) => {
+      if (!enemy.alive) return;
+      if (enemy.frozenUntil && now < enemy.frozenUntil) return;
+
+      // UPDATED: Aggressive AI Growth Logic
+      if (!enemy.baseScale) enemy.baseScale = 12;
+      const currentCalculatedWidth =
+        12 + Math.min(60, (enemy.length - 140) / 8); // Changed /10 to /8 for faster width growth
       if (currentCalculatedWidth > enemy.baseScale)
         enemy.baseScale = currentCalculatedWidth;
       enemy.width = enemy.baseScale;
@@ -1350,7 +1370,8 @@ for (let i = state.food.length - 1; i >= 0; i--) {
       for (let i = state.food.length - 1; i >= 0; i--) {
         if (coll(enemy, state.food[i], enemy.width + 10)) {
           state.food.splice(i, 1);
-          enemy.length += 12;
+          // UPDATED: Much faster growth for AI
+          enemy.length += 20;
         }
       }
 
@@ -1593,47 +1614,86 @@ for (let i = state.food.length - 1; i >= 0; i--) {
       }
     });
 
+    // UPDATED: SERBIAN MINES
     state.mines.forEach((m) => {
-      if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) {
-        ctx.fillStyle = "rgba(255,0,0,0.3)";
+      const r = 35; // Mine Size
+
+      // WARNING FLASH (RED BLAST RADIUS)
+      if (m.state === "triggered") {
+        const timeElapsed = (Date.now() - m.lastTick) / 1000;
+        const pulse = (Date.now() % 300) / 150;
         ctx.beginPath();
-        ctx.arc(m.x, m.y, 200, 0, Math.PI * 2);
+        ctx.arc(m.x, m.y, 300 * (timeElapsed / 3), 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 0, 0, ${0.2 + pulse * 0.1})`;
         ctx.fill();
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
-      const r = 25;
-      const d = r * 2;
+
       ctx.save();
+      // Circular clip for the mine body
       ctx.beginPath();
       ctx.arc(m.x, m.y, r, 0, Math.PI * 2);
       ctx.clip();
-      ctx.fillStyle = "#C6363C";
-      ctx.fillRect(m.x - r, m.y - r, d, d / 3);
-      ctx.fillStyle = "#0C4076";
-      ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3);
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3);
+
+      // SERBIA FLAG COLORS
+      const serbRed = "#C6363C";
+      const serbBlue = "#0C4076";
+      const serbWhite = "#FFFFFF";
+
+      // Top Red
+      ctx.fillStyle = serbRed;
+      ctx.fillRect(m.x - r, m.y - r, r * 2, (r * 2) / 3);
+      // Mid Blue
+      ctx.fillStyle = serbBlue;
+      ctx.fillRect(m.x - r, m.y - r + (r * 2) / 3, r * 2, (r * 2) / 3);
+      // Bot White
+      ctx.fillStyle = serbWhite;
+      ctx.fillRect(m.x - r, m.y - r + (2 * (r * 2)) / 3, r * 2, (r * 2) / 3);
+
+      // SERBIAN CREST (Simplified) on the left
+      const cx = m.x - r * 0.3;
+      const cy = m.y;
+      const cr = r * 0.45;
+      // White Eagle Body
       ctx.fillStyle = "white";
       ctx.beginPath();
-      ctx.moveTo(m.x - 10, m.y - 10);
-      ctx.lineTo(m.x, m.y - 10);
-      ctx.lineTo(m.x, m.y + 5);
-      ctx.lineTo(m.x - 5, m.y + 12);
-      ctx.lineTo(m.x - 10, m.y + 5);
+      ctx.moveTo(cx, cy - cr); // Top
+      ctx.quadraticCurveTo(cx + cr, cy - cr * 0.5, cx + cr, cy); // Right wing
+      ctx.quadraticCurveTo(cx, cy + cr, cx, cy + cr); // Bottom
+      ctx.quadraticCurveTo(cx - cr, cy, cx - cr, cy); // Left wing
       ctx.fill();
-      ctx.fillStyle = "#C6363C";
+      // Red Shield
+      ctx.fillStyle = serbRed;
       ctx.beginPath();
-      ctx.moveTo(m.x - 8, m.y - 8);
-      ctx.lineTo(m.x - 2, m.y - 8);
-      ctx.lineTo(m.x - 2, m.y + 3);
-      ctx.lineTo(m.x - 5, m.y + 8);
-      ctx.lineTo(m.x - 8, m.y + 3);
+      ctx.rect(cx - cr * 0.4, cy - cr * 0.2, cr * 0.8, cr * 0.6);
       ctx.fill();
+
       ctx.restore();
+
+      // Border
       ctx.strokeStyle = m.state === "triggered" ? "red" : "#333";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(m.x, m.y, r, 0, Math.PI * 2);
       ctx.stroke();
+
+      // COUNTDOWN WARNING TEXT
+      if (m.state === "triggered") {
+        const remaining = Math.max(
+          0,
+          (3.0 - (Date.now() - m.lastTick) / 1000).toFixed(1)
+        );
+        ctx.fillStyle = "white";
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 3;
+        ctx.font = "bold 20px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.strokeText(remaining, m.x, m.y);
+        ctx.fillText(remaining, m.x, m.y);
+      }
     });
 
     ctx.lineCap = "round";
@@ -2082,11 +2142,29 @@ for (let i = state.food.length - 1; i >= 0; i--) {
         canvas.width / dpr / 2,
         canvas.height / dpr / 2 - 50
       );
+      // UPDATED: CLICK TO RESPAWN VISUAL
       ctx.font = "20px Arial";
       ctx.fillText(
-        "Press R to Restart",
+        "Press R or Click to Restart",
         canvas.width / dpr / 2,
         canvas.height / dpr / 2
+      );
+      ctx.beginPath();
+      ctx.rect(
+        canvas.width / dpr / 2 - 100,
+        canvas.height / dpr / 2 + 20,
+        200,
+        50
+      );
+      ctx.strokeStyle = "white";
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+      ctx.fill();
+      ctx.fillStyle = "#FECB00";
+      ctx.fillText(
+        "RESPAWN",
+        canvas.width / dpr / 2,
+        canvas.height / dpr / 2 + 52
       );
     }
   }
@@ -2697,4 +2775,3 @@ for (let i = state.food.length - 1; i >= 0; i--) {
     </div>
   );
 }
-
