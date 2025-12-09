@@ -964,92 +964,79 @@ export default function BosniaSnakeFixedRuntime() {
     });
   }
 
-  function updateSinglePlayer() {
-    const state = gameState.current;
-    const p = state.players[0];
-    if (p && p.dead) {
-      if (keys.current["r"]) resetWorld(true);
-      return;
-    }
-
-    state.enemies = state.enemies.filter((e) => e.alive);
-    if (state.enemies.length < MAX_ENEMIES && Math.random() < 0.02)
-      spawnOneEnemy();
-
-    const inp = getLocalInput();
-    if (p) handlePhysics(p, inp);
-    updateAI();
-    if (p) updateEnvironment([p]);
-  }
-
-  function updateSpectatorInterpolation() {
-    if (!serverState.current) return;
-    const cur = gameState.current;
-    const tar = serverState.current;
-
-    cur.food = tar.food.map((f) => ({
-      x: f.x,
-      y: f.y,
-      level: f.l,
-      isGolden: f.g === 1,
-    }));
-    cur.mines = tar.mines;
-    cur.explosions = tar.explosions;
-    cur.syrupZones = (tar.syrupZones || []).map((s) => ({
-      x: s.x,
-      y: s.y,
-      radius: s.radius,
-      ownerId: s.oid,
-    }));
-    cur.shakeIntensity = tar.shakeIntensity;
-
-    if (cur.enemies.length !== tar.enemies.length)
-      cur.enemies = tar.enemies.map((e) => ({ ...e, body: [] }));
-    cur.enemies.forEach((e, i) => {
-      const tE = tar.enemies[i];
-      if (!tE) return;
-      e.x = lerp(e.x, tE.x, INTERPOLATION_SPEED);
-      e.y = lerp(e.y, tE.y, INTERPOLATION_SPEED);
-      e.alive = tE.alive;
-      e.color = tE.color;
-      e.width = tE.width;
-      e.frozenUntil = tE.frozenUntil;
-      if (!e.body) e.body = [];
-      if (e.alive) {
-        e.body.unshift({ x: e.x, y: e.y });
-        while (e.body.length > 140) e.body.pop();
+for (let i = state.food.length - 1; i >= 0; i--) {
+        if (coll(enemy, state.food[i], enemy.width + 10)) {
+          state.food.splice(i, 1);
+          enemy.length += 12;
+          // FIX: Grow width when eating
+          enemy.width = Math.min(35, enemy.width + 0.5);
+        }
       }
-    });
+                    resetWorld(true);
+                    toggleUI('playing'); // <--- This line hides the death screen
+                }
+                return; 
+            }
+            
+            gameData.enemies = gameData.enemies.filter(e => e.alive);
+            if(gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.02) spawnOneEnemy();
+            
+            const now = Date.now();
+            const sprint = keys['shift'] || keys['/'];
+            const triggerAbility = keys['e'];
+            let targetAngle = null;
+            if(currentState.controlMode === 'mouse') targetAngle = Math.atan2(mouse.y - canvas.height/2, mouse.x - canvas.width/2);
+            else {
+                let dx=0, dy=0;
+                if(keys['w'] || keys['arrowup']) dy-=1; if(keys['s'] || keys['arrowdown']) dy+=1;
+                if(keys['a'] || keys['arrowleft']) dx-=1; if(keys['d'] || keys['arrowright']) dx+=1;
+                if(dx!==0 || dy!==0) targetAngle = Math.atan2(dy, dx);
+            }
 
-    if (cur.players.length !== tar.players.length)
-      cur.players = tar.players.map((p) => ({ ...p, body: [] }));
+            if(p.country === 'soviet') {
+                if(sprint && !p.barrageActive && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000)) {
+                    p.barrageActive = true; p.barrageEndTime = now + 2000; p.nextExplosionTime = now; p.abilityActive = true;
+                }
+                if(p.barrageActive) {
+                    if(now >= p.barrageEndTime) { p.barrageActive = false; p.abilityActive = false; p.sovietBoost = false; p.lastAbilityTime = now; }
+                    else {
+                        p.sovietBoost = true;
+                        if(now >= p.nextExplosionTime) {
+                            createExplosion(p.x, p.y, 3 * CELL); gameData.shakeIntensity = Math.min(60, gameData.shakeIntensity+10);
+                            p.nextExplosionTime = now + 200; playSound("soviet_boom");
+                            gameData.enemies.forEach(e => { if(e.alive && dist(e, p) < 3*CELL) killEnemy(e, p); });
+                        }
+                    }
+                }
+            } else if(p.country === 'golden_maple') {
+                if(triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000) && !p.maplePhase) {
+                    p.maplePhase = 'harvest'; p.phaseEndTime = now + 2500; p.lastAbilityTime = now; playSound("angelic");
+                }
+                if(p.maplePhase === 'harvest' && now > p.phaseEndTime) {
+                    p.maplePhase = 'syrup'; p.phaseEndTime = now + 5000;
+                    gameData.syrupZones.push({x:p.x, y:p.y, radius:6*CELL, expiresAt: now+5000, ownerId: p.id});
+                } else if(p.maplePhase === 'syrup' && now > p.phaseEndTime) p.maplePhase = null;
+            }
 
-    cur.players.forEach((p, i) => {
-      const tP = tar.players[i];
-      if (!tP) return;
-      p.x = lerp(p.x, tP.x, INTERPOLATION_SPEED);
-      p.y = lerp(p.y, tP.y, INTERPOLATION_SPEED);
-      p.angle = lerpAngle(p.angle, tP.angle, INTERPOLATION_SPEED);
-      p.dead = tP.dead;
-      p.scale = tP.scale;
-      p.length = tP.length;
-      p.kills = tP.kills;
-      p.deaths = tP.deaths;
-      p.frozenUntil = tP.frozenUntil;
-      p.abilityActive = tP.abilityActive;
-      p.maplePhase = tP.maplePhase;
-      p.name = tP.name;
-      if (!p.body) p.body = [];
-      if (!p.dead) {
-        p.body.unshift({ x: p.x, y: p.y });
-        while (p.body.length > p.length) p.body.pop();
-      } else {
-        p.body = [];
-      }
-      p.country = tP.country;
-      p.colorBody = tP.colorBody;
-    });
-  }
+            let speedMult = 1.0;
+            gameData.syrupZones.forEach(z => { if(dist(p, z) < z.radius && z.ownerId !== p.id) speedMult=0.4; });
+
+            if(targetAngle !== null) {
+                let d = normalizeAngle(targetAngle - p.angle);
+                if(Math.abs(d) < TURN_SPEED) p.angle = targetAngle;
+                else p.angle += d > 0 ? TURN_SPEED : -TURN_SPEED;
+                p.angle = normalizeAngle(p.angle);
+            }
+
+            let s = BASE_SPEED * speedMult;
+            if(sprint && p.length > MIN_LENGTH && (!p.abilityActive || p.country === 'soviet')) { s *= 1.8; if(p.sovietBoost) s*=2.0; p.length -= SPRINT_COST; }
+            p.x += Math.cos(p.angle)*s; p.y += Math.sin(p.angle)*s;
+            if(Math.abs(p.x) > WORLD_SIZE/2 || Math.abs(p.y) > WORLD_SIZE/2) killPlayer(p, null);
+            p.body.unshift({x: p.x, y: p.y}); while(p.body.length > p.length) p.body.pop();
+
+            updateAI();
+            updateEnvironment([p]);
+        }
 
   function handlePhysics(p, inp) {
     if (p.frozenUntil > Date.now()) return;
@@ -1139,40 +1126,43 @@ export default function BosniaSnakeFixedRuntime() {
 
     let s = BASE_SPEED * speedMult;
     if (p.id === myPlayerIndex && cheats.current.speedHack) s = BASE_SPEED * 3;
+// FIX: SERBIA MINES & WARNINGS
+    state.mines.forEach((m) => {
+      const isTriggered = m.state === 'triggered';
+      
+      // 1. Draw Warning Radius (Blinking Red)
+      if(isTriggered) {
+          const pulse = (Math.sin(Date.now() / 50) + 1) / 2; // Fast blinking
+          ctx.fillStyle = `rgba(255, 0, 0, ${0.2 + pulse * 0.3})`;
+          ctx.beginPath(); 
+          ctx.arc(m.x, m.y, 100 + pulse * 20, 0, Math.PI*2); 
+          ctx.fill();
+          ctx.strokeStyle = `rgba(255, 0, 0, ${0.8})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+      }
 
-    const canSprint =
-      inp.sprint &&
-      p.length > MIN_LENGTH &&
-      (!p.abilityActive || p.country === "soviet");
-    if (canSprint) {
-      s *= 1.8;
-      if (p.sovietBoost) s *= 2.0;
-      p.length -= SPRINT_COST;
-    }
+      // 2. Draw Serbia Flag Mine body
+      const r = 25;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI*2); ctx.clip();
+      
+      // Stripes
+      ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x-r, m.y-r, r*2, 17); // Red
+      ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x-r, m.y-8, r*2, 16);  // Blue
+      ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x-r, m.y+8, r*2, 17);   // White
+      
+      // Simple Coat of Arms (Goldish shape on left)
+      ctx.fillStyle = "#D4AF37"; 
+      ctx.beginPath(); ctx.arc(m.x-8, m.y, 8, 0, Math.PI*2); ctx.fill();
+      
+      ctx.restore();
 
-    p.x += Math.cos(p.angle) * s;
-    p.y += Math.sin(p.angle) * s;
-    if (Math.abs(p.x) > WORLD_SIZE / 2 || Math.abs(p.y) > WORLD_SIZE / 2)
-      killPlayer(p, null);
-    p.body.unshift({ x: p.x, y: p.y });
-    while (p.body.length > p.length) p.body.pop();
-  }
-
-  function updateAI() {
-    const state = gameState.current;
-    const viewDist = 500;
-    const now = Date.now();
-    const TRIGGER_DIST = 5 * CELL;
-    const RESET_DIST = 8 * CELL;
-    const TRIGGER_TIME = 3000;
-    const RESET_TIME = 2000;
-
-    state.enemies.forEach((enemy) => {
-      if (!enemy.alive) return;
-      if (enemy.frozenUntil && now < enemy.frozenUntil) return;
-
-      if (!enemy.baseScale) enemy.baseScale = 12;
-      const currentCalculatedWidth =
+      // 3. Outline
+      ctx.strokeStyle = isTriggered ? 'red' : '#333';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI*2); ctx.stroke();
+    });
         12 + Math.min(33, (enemy.length - 140) / 10);
       if (currentCalculatedWidth > enemy.baseScale)
         enemy.baseScale = currentCalculatedWidth;
@@ -2707,3 +2697,4 @@ export default function BosniaSnakeFixedRuntime() {
     </div>
   );
 }
+
