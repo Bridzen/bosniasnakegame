@@ -1,11 +1,8 @@
---- START OF FILE bosniasnake.js ---
-
 import React, { useEffect, useRef, useState } from "react";
 import Peer from "peerjs";
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
-import { getAuth, signInAnonymously } from "firebase/auth";
 import {
   getFirestore,
   collection,
@@ -14,13 +11,13 @@ import {
   limit,
   onSnapshot,
   addDoc,
+  setDoc,
+  deleteDoc,
   serverTimestamp,
   where,
   getDocs,
   updateDoc,
   doc,
-  setDoc,
-  deleteDoc,
 } from "firebase/firestore";
 
 // --- AUDIO ENGINE (Procedural SFX) ---
@@ -42,9 +39,11 @@ function playSound(type) {
     osc.type = "sine";
     osc.frequency.setValueAtTime(600, now);
     osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
+
     osc.connect(gainNode);
     gainNode.gain.setValueAtTime(0.05, now);
     gainNode.gain.linearRampToValueAtTime(0.01, now + 0.1);
+
     osc.start(now);
     osc.stop(now + 0.1);
   } else if (type === "soviet_boom") {
@@ -52,16 +51,21 @@ function playSound(type) {
     const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
     const noise = audioCtx.createBufferSource();
     noise.buffer = buffer;
+
     const filter = audioCtx.createBiquadFilter();
     filter.type = "lowpass";
     filter.frequency.setValueAtTime(800, now);
     filter.frequency.exponentialRampToValueAtTime(10, now + 1);
+
     noise.connect(filter);
     filter.connect(gainNode);
+
     gainNode.gain.setValueAtTime(0.8, now);
     gainNode.gain.exponentialRampToValueAtTime(0.01, now + 1);
+
     noise.start(now);
     noise.stop(now + 1.5);
   } else if (type === "angelic") {
@@ -72,23 +76,15 @@ function playSound(type) {
       osc.frequency.value = f;
       if (i === 1) osc.detune.value = 5;
       if (i === 2) osc.detune.value = -5;
+
       osc.connect(gainNode);
       osc.start(now);
       osc.stop(now + 2.5);
     });
+
     gainNode.gain.setValueAtTime(0, now);
     gainNode.gain.linearRampToValueAtTime(0.08, now + 0.5);
     gainNode.gain.linearRampToValueAtTime(0, now + 2.5);
-  } else if (type === "chat") {
-    const osc = audioCtx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(800, now);
-    osc.frequency.linearRampToValueAtTime(1200, now + 0.1);
-    osc.connect(gainNode);
-    gainNode.gain.setValueAtTime(0.05, now);
-    gainNode.gain.linearRampToValueAtTime(0, now + 0.1);
-    osc.start(now);
-    osc.stop(now + 0.1);
   }
 }
 
@@ -103,10 +99,8 @@ const firebaseConfig = {
   measurementId: "G-FFQ2PJ3X5W",
 };
 
-// --- INITIALIZE DATABASE ---
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app);
 
 // --- GAMEPLAY CONFIGURATION ---
 const OWNER_PASSWORD = "Roblox13_isme";
@@ -115,8 +109,6 @@ const GRID = 80;
 const WORLD_SIZE = CELL * GRID;
 const MIN_LENGTH = 140;
 const SPRINT_COST = 0.5;
-
-// --- SPEED CONFIGURATION ---
 const BASE_SPEED = 4.2;
 const TURN_SPEED = 0.09;
 const MAX_ENEMIES = 8;
@@ -126,20 +118,13 @@ const LENGTH_GAIN = 8;
 const BROADCAST_RATE = 50;
 const INTERPOLATION_SPEED = 0.2;
 
-// --- SKIN CONFIGURATION ---
 const SKINS_NORMAL = [
   "bosnia",
-  "italy",
-  "poland",
-  "france",
-  "germany",
-  "ukraine",
-  "sweden",
-  "denmark",
-  "uk",
-  "usa",
   "russia",
+  "germany",
+  "france",
   "canada",
+  "ukraine",
 ];
 const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple"];
 const ALL_SKINS = [...SKINS_NORMAL, ...SKINS_SPECIAL];
@@ -154,28 +139,15 @@ const SKIN_BODY_COLORS = {
   ireland: "#169B62",
   soviet: "#CC0000",
   golden_maple: "#DAA520",
-  usa: "#3C3B6E",
-  denmark: "#C60C30",
-  sweden: "#006AA7",
-  poland: "#DC143C",
-  italy: "#008C45",
-  uk: "#012169",
 };
 
-// --- UNLOCK CRITERIA ---
 const UNLOCK_CRITERIA = {
   bosnia: { type: "default", label: "Default" },
-  italy: { type: "default", label: "Default" },
+  russia: { type: "scale", val: 50, label: "Reach Size 50" },
   germany: { type: "scale", val: 40, label: "Reach Size 40" },
   france: { type: "deaths", val: 5, label: "Die 5 Times" },
-  sweden: { type: "kills", val: 10, label: "Get 10 Kills" },
-  denmark: { type: "kills", val: 25, label: "Get 25 Kills" },
-  poland: { type: "deaths", val: 15, label: "Die 15 Times" },
-  uk: { type: "length", val: 800, label: "Reach Length 800" },
-  ukraine: { type: "games", val: 5, label: "Play 5 Games" },
   canada: { type: "length", val: 1000, label: "Reach Length 1k" },
-  russia: { type: "scale", val: 50, label: "Reach Size 50" },
-  usa: { type: "scale", val: 75, label: "Reach Size 75" },
+  ukraine: { type: "games", val: 5, label: "Play 5 Games" },
   ireland: { type: "code", label: "Secret Code" },
   soviet: { type: "custom_soviet", label: "Russia + Size 500 + 50 Kills" },
   golden_maple: {
@@ -184,7 +156,6 @@ const UNLOCK_CRITERIA = {
   },
 };
 
-// --- UTILS ---
 function randPosCell() {
   return Math.floor(Math.random() * GRID) * CELL - WORLD_SIZE / 2;
 }
@@ -206,7 +177,7 @@ function lerpAngle(a, b, t) {
   return a + twoD * t;
 }
 
-export default function BosniaSnakeFixedRuntime() {
+export default function BosniaSnakeLiveCounter() {
   const canvasRef = useRef(null);
 
   // --- UI STATES ---
@@ -214,20 +185,22 @@ export default function BosniaSnakeFixedRuntime() {
   const [controlMode, setControlMode] = useState("mouse");
   const [skinCategory, setSkinCategory] = useState("normal");
   const [selectedSkin, setSelectedSkin] = useState("bosnia");
-  const [myId, setMyId] = useState("");
+  const [myId, setMyId] = useState("Generating...");
+  const [connectId, setConnectId] = useState("");
   const [isHost, setIsHost] = useState(false);
+  const [lobbyCount, setLobbyCount] = useState(1);
   const [myPlayerIndex, setMyPlayerIndex] = useState(0);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [showMultiMenu, setShowMultiMenu] = useState(false);
   const [playerName, setPlayerName] = useState("");
   const [leaderboard, setLeaderboard] = useState([]);
   const [redeemCode, setRedeemCode] = useState("");
 
-  // --- SPECTATOR & CHAT STATES ---
-  const [spectateList, setSpectateList] = useState([]);
+  // --- SPECTATOR STATES ---
+  const [showSpectateBrowser, setShowSpectateBrowser] = useState(false);
+  const [activeGames, setActiveGames] = useState([]); 
   const [isSpectating, setIsSpectating] = useState(false);
-  const [chatInput, setChatInput] = useState("");
-  const [chatMessages, setChatMessages] = useState([]);
-  const [isScanning, setIsScanning] = useState(false);
-  const [authReady, setAuthReady] = useState(false);
+  const [spectateTargetIndex, setSpectateTargetIndex] = useState(0);
 
   // Owner States
   const [showOwnerLogin, setShowOwnerLogin] = useState(false);
@@ -245,7 +218,6 @@ export default function BosniaSnakeFixedRuntime() {
     unlockedSecrets: [],
   });
 
-  // --- GAME ENGINE REFS ---
   const cheats = useRef({ godMode: false, speedHack: false });
   const peerRef = useRef(null);
   const connections = useRef([]);
@@ -254,9 +226,9 @@ export default function BosniaSnakeFixedRuntime() {
   const serverState = useRef(null);
   const mouse = useRef({ x: 0, y: 0 });
   const keys = useRef({});
-
-  // Use a ref to store current render/update functions to avoid stale closures during development hot-reloads
-  const gameLogicRef = useRef({});
+  const remoteInputs = useRef({});
+  const lastInputSent = useRef(null);
+  const lobbyHeartbeat = useRef(null);
 
   const gameState = useRef({
     mode: null,
@@ -270,51 +242,7 @@ export default function BosniaSnakeFixedRuntime() {
     gameOver: false,
   });
 
-  // --- AUTH AND SCANNER ---
-  useEffect(() => {
-    signInAnonymously(auth)
-      .then(() => {
-        console.log("Authenticated");
-      })
-      .catch((err) => {
-        console.warn("Auth warning:", err);
-      })
-      .finally(() => {
-        setAuthReady(true);
-      });
-  }, []);
-
-  useEffect(() => {
-    const scanForGames = async () => {
-      setIsScanning(true);
-      try {
-        const gamesRef = collection(db, "active_games");
-        const q = query(gamesRef, orderBy("lastBeat", "desc"), limit(20));
-        const querySnapshot = await getDocs(q);
-        const games = [];
-        const now = Date.now();
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          if (data.lastBeat) {
-            const diff = now - data.lastBeat.toMillis();
-            if (diff < 30000) {
-              games.push({ id: doc.id, ...data });
-            }
-          }
-        });
-        setSpectateList(games);
-      } catch (err) {
-        console.error("Scanner error:", err);
-      } finally {
-        setIsScanning(false);
-      }
-    };
-    scanForGames();
-    const interval = setInterval(scanForGames, 15000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // --- DATA LOADING ---
+  // --- DATA LOADING & LOBBIES ---
   useEffect(() => {
     try {
       const savedStats = localStorage.getItem("bosnia_snake_stats_v2");
@@ -327,28 +255,84 @@ export default function BosniaSnakeFixedRuntime() {
       console.error(e);
     }
 
-    const q = query(
-      collection(db, "leaderboard"),
-      orderBy("size", "desc"),
-      limit(5)
-    );
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const lbData = snapshot.docs.map((doc) => doc.data());
-        setLeaderboard(lbData);
-      },
-      (error) => {
-        console.warn("Leaderboard failed (likely permissions)");
-      }
-    );
+    const q = query(collection(db, "leaderboard"), orderBy("size", "desc"), limit(5));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const lbData = snapshot.docs.map((doc) => doc.data());
+      setLeaderboard(lbData);
+    });
+    
+    // --- LIVE ACTIVE GAMES LISTENER ---
+    const qLobby = query(collection(db, "lobbies"), orderBy("timestamp", "desc"));
+    const unsubLobby = onSnapshot(qLobby, (snapshot) => {
+        const now = Date.now();
+        const games = [];
+        snapshot.forEach(doc => {
+            const d = doc.data();
+            // Safety check: sometimes timestamp is null on immediate write
+            const time = d.timestamp ? d.timestamp.toMillis() : now;
+            // Filter stale games (inactive for > 40s)
+            if (now - time < 40000) {
+                games.push({ id: doc.id, ...d });
+            }
+        });
+        setActiveGames(games);
+    });
 
-    return () => unsubscribe();
+    // --- REFRESH COUNTER INTERVAL (Every 5 seconds to prune stale games) ---
+    const refreshInterval = setInterval(() => {
+        setActiveGames(prev => {
+            const now = Date.now();
+            return prev.filter(g => {
+                const time = g.timestamp ? g.timestamp.toMillis() : now;
+                return now - time < 40000; // 40s buffer
+            });
+        });
+    }, 5000);
+
+    return () => {
+        unsubscribe();
+        unsubLobby();
+        clearInterval(refreshInterval);
+        if (lobbyHeartbeat.current) clearInterval(lobbyHeartbeat.current);
+    };
   }, []);
 
   const handleNameChange = (e) => {
     setPlayerName(e.target.value);
     localStorage.setItem("bosnia_snake_username", e.target.value);
+  };
+
+  const publishLobbyPresence = async (peerId, mode, currentSize = 18) => {
+      if (!peerId) return;
+      const lobbyData = {
+          hostName: playerName,
+          mode: mode,
+          size: currentSize,
+          players: connections.current.length + 1,
+          timestamp: serverTimestamp()
+      };
+      try {
+        await setDoc(doc(db, "lobbies", peerId), lobbyData);
+      } catch(e) { console.error("Lobby publish error", e); }
+  };
+
+  const startHeartbeat = (peerId, mode) => {
+      if (lobbyHeartbeat.current) clearInterval(lobbyHeartbeat.current);
+      publishLobbyPresence(peerId, mode);
+      lobbyHeartbeat.current = setInterval(() => {
+          const myPlayer = gameState.current.players[0]; 
+          const size = myPlayer ? myPlayer.scale : 18;
+          publishLobbyPresence(peerId, mode, size);
+      }, 5000); // Send heartbeat every 5s
+  };
+
+  const cleanupPresence = async () => {
+      if (lobbyHeartbeat.current) clearInterval(lobbyHeartbeat.current);
+      if (peerRef.current && peerRef.current.id) {
+          try {
+             await deleteDoc(doc(db, "lobbies", peerRef.current.id));
+          } catch(e) {}
+      }
   };
 
   const submitScoreToLeaderboard = async (finalScale) => {
@@ -383,22 +367,10 @@ export default function BosniaSnakeFixedRuntime() {
     setUserStats((prev) => {
       const next = { ...prev };
       let changed = false;
-      if (updates.kill) {
-        next.totalKills++;
-        changed = true;
-      }
-      if (updates.death) {
-        next.totalDeaths++;
-        changed = true;
-      }
-      if (updates.game) {
-        next.gamesPlayed++;
-        changed = true;
-      }
-      if (
-        updates.unlockSecret &&
-        !next.unlockedSecrets.includes(updates.unlockSecret)
-      ) {
+      if (updates.kill) { next.totalKills++; changed = true; }
+      if (updates.death) { next.totalDeaths++; changed = true; }
+      if (updates.game) { next.gamesPlayed++; changed = true; }
+      if (updates.unlockSecret && !next.unlockedSecrets.includes(updates.unlockSecret)) {
         next.unlockedSecrets.push(updates.unlockSecret);
         changed = true;
       }
@@ -420,25 +392,10 @@ export default function BosniaSnakeFixedRuntime() {
 
   const isSkinUnlocked = (skin) => {
     const req = UNLOCK_CRITERIA[skin];
-    if (skin === "soviet") {
-      return (
-        isSkinUnlocked("russia") &&
-        userStats.bestScale >= 500 &&
-        userStats.totalKills >= 50
-      );
-    }
-    if (skin === "golden_maple") {
-      return (
-        isSkinUnlocked("canada") &&
-        userStats.bestScale >= 250 &&
-        userStats.totalKills >= 150
-      );
-    }
+    if (skin === "soviet") return isSkinUnlocked("russia") && userStats.bestScale >= 500 && userStats.totalKills >= 50;
+    if (skin === "golden_maple") return isSkinUnlocked("canada") && userStats.bestScale >= 250 && userStats.totalKills >= 150;
     if (req.type === "default") return true;
-    if (req.type === "code")
-      return (
-        userStats.unlockedSecrets && userStats.unlockedSecrets.includes(skin)
-      );
+    if (req.type === "code") return userStats.unlockedSecrets && userStats.unlockedSecrets.includes(skin);
     if (req.type === "kills") return userStats.totalKills >= req.val;
     if (req.type === "deaths") return userStats.totalDeaths >= req.val;
     if (req.type === "scale") return userStats.bestScale >= req.val;
@@ -463,7 +420,6 @@ export default function BosniaSnakeFixedRuntime() {
     if (!isSkinUnlocked(selectedSkin)) setSelectedSkin("bosnia");
   }, [userStats]);
 
-  // --- CONTROLS ---
   useEffect(() => {
     if (!CanvasRenderingContext2D.prototype.roundRect) {
       // @ts-ignore
@@ -481,8 +437,6 @@ export default function BosniaSnakeFixedRuntime() {
       };
     }
     const handleDown = (e) => {
-      if (document.activeElement && document.activeElement.tagName === "INPUT")
-        return;
       if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
       if (e.key === "`" || e.key === "~") {
         e.preventDefault();
@@ -490,33 +444,23 @@ export default function BosniaSnakeFixedRuntime() {
         else setShowOwnerLogin((p) => !p);
         return;
       }
+      if (isSpectating) {
+        if (e.key === "ArrowLeft") cycleSpectatorTarget(-1);
+        if (e.key === "ArrowRight") cycleSpectatorTarget(1);
+      }
       keys.current[e.key.toLowerCase()] = true;
     };
     const handleUp = (e) => {
-      if (document.activeElement && document.activeElement.tagName === "INPUT")
-        return;
       keys.current[e.key.toLowerCase()] = false;
     };
     const handleMouseMove = (e) => {
       mouse.current.x = e.clientX;
       mouse.current.y = e.clientY;
     };
-    const handleMouseDown = (e) => {
-      const me = gameState.current.players[myPlayerIndex];
-      // Explicit reset call if dead
-      if (me && me.dead && menuState === "playing" && !isSpectating) {
-        resetWorld(true);
-      }
-    };
     const handleTouchStart = (e) => {
       if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
       mouse.current.x = e.touches[0].clientX;
       mouse.current.y = e.touches[0].clientY;
-
-      const me = gameState.current.players[myPlayerIndex];
-      if (me && me.dead && menuState === "playing" && !isSpectating) {
-        resetWorld(true);
-      }
     };
     const handleTouchMove = (e) => {
       mouse.current.x = e.touches[0].clientX;
@@ -527,39 +471,51 @@ export default function BosniaSnakeFixedRuntime() {
     window.addEventListener("keydown", handleDown);
     window.addEventListener("keyup", handleUp);
     window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("touchstart", handleTouchStart, { passive: false });
     window.addEventListener("touchmove", handleTouchMove, { passive: false });
     return () => {
       window.removeEventListener("keydown", handleDown);
       window.removeEventListener("keyup", handleUp);
       window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchmove", handleTouchMove);
-      if (peerRef.current) peerRef.current.destroy();
+      if (peerRef.current) { cleanupPresence(); peerRef.current.destroy(); }
     };
-  }, [showOwnerPanel, menuState, isSpectating, myPlayerIndex]);
+  }, [showOwnerPanel, isSpectating]);
+
+  const cycleSpectatorTarget = (dir) => {
+    const players = gameState.current.players;
+    if (players.length === 0) return;
+    
+    // Find active indices
+    const activeIndices = players
+      .map((p, i) => (p.active && !p.dead && !p.isSpectator ? i : -1))
+      .filter((i) => i !== -1);
+
+    if (activeIndices.length === 0) return;
+
+    let currentPos = activeIndices.indexOf(spectateTargetIndex);
+    if (currentPos === -1) currentPos = 0;
+
+    let newPos = currentPos + dir;
+    if (newPos >= activeIndices.length) newPos = 0;
+    if (newPos < 0) newPos = activeIndices.length - 1;
+
+    setSpectateTargetIndex(activeIndices[newPos]);
+  };
 
   const getLocalInput = () => {
-    if (isSpectating)
-      return {
-        targetAngle: null,
-        sprint: false,
-        respawn: false,
-        triggerAbility: false,
-      };
     const sprint = keys.current["shift"] || keys.current["/"];
     const respawn = keys.current[" "];
     const triggerAbility = keys.current["e"];
+
     let targetAngle = null;
     if (controlMode === "mouse") {
       const cx = window.innerWidth / 2;
       const cy = window.innerHeight / 2;
       targetAngle = Math.atan2(mouse.current.y - cy, mouse.current.x - cx);
     } else {
-      let dx = 0,
-        dy = 0;
+      let dx = 0, dy = 0;
       if (keys.current["w"] || keys.current["arrowup"]) dy -= 1;
       if (keys.current["s"] || keys.current["arrowdown"]) dy += 1;
       if (keys.current["a"] || keys.current["arrowleft"]) dx -= 1;
@@ -569,7 +525,6 @@ export default function BosniaSnakeFixedRuntime() {
     return { targetAngle, sprint, respawn, triggerAbility };
   };
 
-  // --- CHEAT FUNCTIONS ---
   const handleOwnerLogin = (e) => {
     e.preventDefault();
     if (ownerPasswordInput === OWNER_PASSWORD) {
@@ -607,7 +562,6 @@ export default function BosniaSnakeFixedRuntime() {
     setCheatMsg("Bots Cleared");
   };
 
-  // --- NETWORK DATA COMPRESSION ---
   const compressState = (state) => ({
     mode: state.mode,
     shakeIntensity: Math.round(state.shakeIntensity),
@@ -621,8 +575,6 @@ export default function BosniaSnakeFixedRuntime() {
       x: Math.round(m.x),
       y: Math.round(m.y),
       state: m.state,
-      lastTick: m.lastTick,
-      timer: m.timer,
     })),
     explosions: state.explosions.map((e) => ({
       x: Math.round(e.x),
@@ -639,6 +591,7 @@ export default function BosniaSnakeFixedRuntime() {
     players: state.players.map((p) => ({
       id: p.id,
       active: p.active,
+      isSpectator: p.isSpectator || false,
       dead: p.dead,
       x: Math.round(p.x),
       y: Math.round(p.y),
@@ -652,7 +605,6 @@ export default function BosniaSnakeFixedRuntime() {
       frozenUntil: p.frozenUntil || 0,
       abilityActive: p.abilityActive || false,
       maplePhase: p.maplePhase,
-      name: p.name || "Unknown",
     })),
     enemies: state.enemies.map((e) => ({
       alive: e.alive,
@@ -665,18 +617,6 @@ export default function BosniaSnakeFixedRuntime() {
     })),
   });
 
-  // --- REFRESH LOGIC REF ---
-  // This hook ensures that every render, the ref points to the LATEST version of the functions.
-  // This solves the problem where the loop keeps running old code after you save the file.
-  useEffect(() => {
-    gameLogicRef.current = {
-      updateSinglePlayer,
-      renderGame,
-      updateSpectatorInterpolation,
-    };
-  });
-
-  // --- GAME LOOP ---
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -715,12 +655,9 @@ export default function BosniaSnakeFixedRuntime() {
           ctx.stroke();
         }
       } else {
-        // --- RETRIEVE FRESH LOGIC FROM REF ---
-        const logic = gameLogicRef.current;
         const state = gameState.current;
-
         if (
-          !isSpectating &&
+          !isSpectating && 
           state.players[myPlayerIndex] &&
           !state.players[myPlayerIndex].dead &&
           timestamp % 1000 < 16
@@ -730,27 +667,44 @@ export default function BosniaSnakeFixedRuntime() {
             length: state.players[myPlayerIndex].length,
           });
         }
-
-        if (isHost && logic.updateSinglePlayer) {
-          logic.updateSinglePlayer(); // Call the latest version
-          if (timestamp - lastSentTime.current > BROADCAST_RATE) {
+        
+        // --- GAME LOOP LOGIC ---
+        // CRITICAL: If spectating, force client interpolation
+        if (isSpectating) {
+            updateMultiplayerClientInterpolation();
+        } else if (state.mode === "single") {
+            updateSinglePlayer(); 
+        } else if (state.mode === "multi") {
+            if (isHost) {
+                updateMultiplayerHost(); 
+            } else {
+                updateMultiplayerClientInterpolation();
+                const input = getLocalInput();
+                const inputJson = JSON.stringify(input);
+                if (inputJson !== lastInputSent.current || timestamp % 100 === 0) {
+                    if (hostConn.current && hostConn.current.open) {
+                        hostConn.current.send({
+                            type: "INPUT",
+                            index: myPlayerIndex,
+                            keys: input,
+                        });
+                        lastInputSent.current = inputJson;
+                    }
+                }
+            }
+        }
+        
+        // --- BROADCAST LOGIC (Single & Multi Host) ---
+        if (isHost && timestamp - lastSentTime.current > BROADCAST_RATE) {
             const payload = { type: "STATE", state: compressState(state) };
             connections.current.forEach((c) => {
               if (c.open) c.send(payload);
             });
             lastSentTime.current = timestamp;
-          }
-        } else if (isSpectating && logic.updateSpectatorInterpolation) {
-          logic.updateSpectatorInterpolation();
         }
 
-        let renderIndex = myPlayerIndex;
-        if (isSpectating && state.players.length > 0) {
-          renderIndex = 0;
-        }
-        if (logic.renderGame) {
-          logic.renderGame(ctx, canvas, renderIndex); // Call the latest version
-        }
+        const renderIndex = isSpectating ? spectateTargetIndex : myPlayerIndex;
+        renderGame(ctx, canvas, renderIndex);
       }
       animationId = requestAnimationFrame(loop);
     };
@@ -759,163 +713,288 @@ export default function BosniaSnakeFixedRuntime() {
       cancelAnimationFrame(animationId);
       window.removeEventListener("resize", handleResize);
     };
-  }, [menuState, isHost, myPlayerIndex, controlMode, isSpectating]);
+  }, [menuState, isHost, myPlayerIndex, controlMode, isSpectating, spectateTargetIndex]);
 
-  // --- PUBLISH ACTIVE GAME TO FIRESTORE ---
-  const publishGamePresence = (pid, pName) => {
-    if (!pid) return;
-    const docRef = doc(db, "active_games", pid);
-    setDoc(docRef, {
-      host: pName,
-      lastBeat: serverTimestamp(),
-    }).catch((err) => console.warn("Presence publish failed:", err.code));
-  };
+  function getRandomCountry() {
+    return ALL_SKINS[Math.floor(Math.random() * ALL_SKINS.length)];
+  }
 
+  // --- SINGLEPLAYER ---
   const initSinglePlayer = () => {
-    if (peerRef.current) peerRef.current.destroy();
+    if (peerRef.current) { cleanupPresence(); peerRef.current.destroy(); }
+    setIsSpectating(false);
+    updateStats({ game: true });
+    
+    // Create Peer to allow Spectators
     const peer = new Peer();
     peerRef.current = peer;
     connections.current = [];
+    
+    peer.on('open', (id) => {
+        setMyId(id);
+        startHeartbeat(id, 'single');
+    });
+    
+    peer.on('connection', (conn) => {
+        conn.on('data', (d) => {
+            if(d.type === 'BECOME_SPECTATOR') {
+                 connections.current.push(conn);
+                 conn.send({ type: "WELCOME", index: -1, count: 1 }); 
+            }
+        });
+        conn.on('close', () => {
+             connections.current = connections.current.filter(c => c !== conn);
+        });
+    });
+
+    gameState.current.mode = "single";
+    gameState.current.players = [
+      {
+        id: 0,
+        active: true,
+        x: 0,
+        y: 0,
+        angle: -Math.PI / 2,
+        body: [],
+        length: 140,
+        dead: false,
+        country: selectedSkin,
+        colorBody: SKIN_BODY_COLORS[selectedSkin],
+        scale: 18,
+        kills: 0,
+        deaths: 0,
+        frozenUntil: 0,
+        abilityActive: false,
+        lastAbilityTime: 0,
+        maplePhase: null,
+      },
+    ];
+    resetWorld(true);
+    setMenuState("playing");
+    setMyPlayerIndex(0);
+    setIsHost(true);
+  };
+
+  const initHost = (customId = null) => {
+    if (peerRef.current) { cleanupPresence(); peerRef.current.destroy(); }
+    setIsSpectating(false);
+    // @ts-ignore
+    const peer = customId ? new Peer(customId) : new Peer();
+    peerRef.current = peer;
+    connections.current = [];
+
+    peer.on("error", (err) => {
+      if (customId && err.type === "unavailable-id") {
+        peer.destroy();
+        alert("Host Error: " + err.type);
+        return;
+      }
+      alert("Host Error: " + err.type);
+    });
 
     peer.on("open", (id) => {
       setMyId(id);
       setIsHost(true);
-      setIsSpectating(false);
+      setMenuState("multi_lobby");
+      setLobbyCount(1);
       setMyPlayerIndex(0);
-
-      publishGamePresence(id, playerName);
-      const hb = setInterval(() => publishGamePresence(id, playerName), 5000);
-
-      updateStats({ game: true });
-      gameState.current.mode = "single";
-      gameState.current.players = [
-        {
-          id: 0,
-          active: true,
-          x: 0,
-          y: 0,
-          angle: -Math.PI / 2,
-          body: [],
-          length: 140,
-          dead: false,
-          country: selectedSkin,
-          colorBody: SKIN_BODY_COLORS[selectedSkin],
-          scale: 18,
-          kills: 0,
-          deaths: 0,
-          frozenUntil: 0,
-          abilityActive: false,
-          lastAbilityTime: 0,
-          maplePhase: null,
-          name: playerName,
-        },
-      ];
-      resetWorld(true);
-      setMenuState("playing");
-      setChatMessages([]);
-
-      peer.on("connection", (conn) => {
-        connections.current.push(conn);
-        conn.on("data", (data) => {
-          if (data.type === "CHAT") {
-            const msg = { name: data.name, text: data.text, color: "#aaa" };
-            setChatMessages((prev) => [...prev.slice(-9), msg]);
-            playSound("chat");
-            broadcastChat(msg);
-          }
-        });
-        conn.on("close", () => {
-          connections.current = connections.current.filter((c) => c !== conn);
-        });
-      });
-
-      peer.on("disconnected", () => {
-        clearInterval(hb);
-        deleteDoc(doc(db, "active_games", id)).catch((e) =>
-          console.warn("Delete failed")
-        );
-      });
+      startHeartbeat(id, 'multi');
     });
-  };
 
-  const broadcastChat = (msg) => {
-    connections.current.forEach((c) => {
-      if (c.open) c.send({ type: "CHAT_MSG", msg });
-    });
-  };
-
-  const handleSendChat = (e) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
-
-    const msg = {
-      name: playerName,
-      text: chatInput,
-      color: isHost ? "#FECB00" : "#fff",
-    };
-
-    if (isHost) {
-      setChatMessages((prev) => [...prev.slice(-9), msg]);
-      playSound("chat");
-      broadcastChat(msg);
-    } else {
-      if (hostConn.current && hostConn.current.open) {
-        hostConn.current.send({
-          type: "CHAT",
-          name: playerName,
-          text: chatInput,
-        });
-        setChatMessages((prev) => [...prev.slice(-9), msg]);
+    peer.on("connection", (conn) => {
+      if (connections.current.length >= 20) {
+        conn.on("open", () => conn.send({ type: "FULL" }));
+        setTimeout(() => conn.close(), 500);
+        return;
       }
-    }
-    setChatInput("");
+      connections.current.push(conn);
+      const newCount = connections.current.length + 1;
+      setLobbyCount(newCount);
+      
+      conn.on("open", () =>
+        conn.send({
+          type: "WELCOME",
+          index: connections.current.length,
+          count: newCount,
+        })
+      );
+      conn.on("data", (data) => {
+        if (data.type === "INPUT") remoteInputs.current[data.index] = data.keys;
+        if (data.type === "BECOME_SPECTATOR") {
+           const pIdx = data.index;
+           if (gameState.current.players[pIdx]) {
+               gameState.current.players[pIdx].isSpectator = true;
+               gameState.current.players[pIdx].active = false;
+               gameState.current.players[pIdx].dead = true;
+               gameState.current.players[pIdx].x = -99999;
+           }
+        }
+      });
+      conn.on("close", () => {
+        connections.current = connections.current.filter((c) => c !== conn);
+        setLobbyCount(connections.current.length + 1);
+      });
+    });
   };
 
-  const initSpectate = (idToJoin) => {
+  const initJoin = (idToJoin) => {
     if (!idToJoin) return;
-    if (peerRef.current) peerRef.current.destroy();
-
+    setIsConnecting(true);
+    setIsSpectating(false);
+    if (peerRef.current) { cleanupPresence(); peerRef.current.destroy(); }
     // @ts-ignore
     const peer = new Peer();
     peerRef.current = peer;
-
     peer.on("open", () => {
       const conn = peer.connect(idToJoin);
       hostConn.current = conn;
       setIsHost(false);
-      setIsSpectating(true);
-
       conn.on("open", () => {
-        setMenuState("playing");
-        setChatMessages([
-          { name: "System", text: "Connected to host.", color: "cyan" },
-        ]);
+        setIsConnecting(false);
+        setMenuState("multi_lobby");
       });
-
       conn.on("data", (data) => {
+        if (data.type === "WELCOME") {
+          setMyPlayerIndex(data.index);
+          setLobbyCount(data.count);
+        }
+        if (data.type === "LOBBY_UPDATE") setLobbyCount(data.count);
+        if (data.type === "START") startGameMulti(false, data.playerCount);
         if (data.type === "STATE") {
           serverState.current = data.state;
-          if (!gameState.current.players.length) {
-            const freshState = JSON.parse(JSON.stringify(data.state));
-            freshState.players.forEach((p) => (p.body = p.body || []));
-            freshState.enemies.forEach((e) => (e.body = e.body || []));
-            gameState.current = freshState;
-          }
+          if (!gameState.current.players.length)
+            gameState.current = JSON.parse(JSON.stringify(data.state));
         }
-        if (data.type === "CHAT_MSG") {
-          setChatMessages((prev) => [...prev.slice(-9), data.msg]);
-          playSound("chat");
+        if (data.type === "FULL") {
+          alert("Room Full!");
+          setIsConnecting(false);
         }
       });
       conn.on("close", () => {
         alert("Host Disconnected");
+        setIsConnecting(false);
         setMenuState("start");
-        setIsSpectating(false);
       });
     });
     peer.on("error", (err) => {
-      alert("Spectate Error: " + err.type);
+      alert("Connection Error: " + err.type);
+      setIsConnecting(false);
     });
+  };
+
+  const initSpectate = (idToJoin) => {
+      if (!idToJoin) return;
+      setIsConnecting(true);
+      if (peerRef.current) { cleanupPresence(); peerRef.current.destroy(); }
+      // @ts-ignore
+      const peer = new Peer();
+      peerRef.current = peer;
+
+      // Clean reset of game state
+      gameState.current = {
+        mode: "spectating", 
+        players: [],
+        enemies: [],
+        food: [],
+        mines: [],
+        explosions: [],
+        syrupZones: [],
+        shakeIntensity: 0,
+        gameOver: false,
+      };
+
+      peer.on("open", () => {
+          const conn = peer.connect(idToJoin);
+          hostConn.current = conn;
+          setIsHost(false);
+
+          conn.on("open", () => {
+              setIsConnecting(false);
+          });
+
+          conn.on("data", (data) => {
+              if (data.type === "WELCOME") {
+                  conn.send({ type: "BECOME_SPECTATOR", index: data.index });
+                  setMyPlayerIndex(data.index);
+                  setIsSpectating(true);
+                  setSpectateTargetIndex(0);
+                  setShowSpectateBrowser(false);
+                  setMenuState("playing"); 
+              }
+              if (data.type === "START") {
+                  startGameMulti(false, data.playerCount);
+              }
+              if (data.type === "STATE") {
+                  serverState.current = data.state;
+                  if (!gameState.current.players.length) {
+                       gameState.current = JSON.parse(JSON.stringify(data.state));
+                  }
+              }
+          });
+          conn.on("close", () => {
+              alert("Stream Ended");
+              setIsConnecting(false);
+              setMenuState("start");
+          });
+      });
+      peer.on("error", (err) => {
+        alert("Connection Error: " + err.type);
+        setIsConnecting(false);
+      });
+  };
+
+  const handleQuickPlay = (i) => initHost(`bosnia_snake_v1_room_${i}`);
+
+  const handleHostStart = () => {
+    const total = connections.current.length + 1;
+    startGameMulti(true, total);
+    connections.current.forEach((c) => {
+      if (c.open) c.send({ type: "START", playerCount: total });
+    });
+  };
+
+  const startGameMulti = (isHostLocal, count) => {
+    updateStats({ game: true });
+    gameState.current.mode = "multi";
+    gameState.current.players = [];
+    const configs = [
+      { country: selectedSkin, cBody: SKIN_BODY_COLORS[selectedSkin], x: 0, y: -200 },
+      { country: getRandomCountry(), cBody: "#FFFFFF", x: -200, y: 200 },
+      { country: getRandomCountry(), cBody: "#FFFFFF", x: 200, y: 200 },
+    ];
+    for (let k = 3; k < count + 5; k++)
+      configs.push({
+        country: getRandomCountry(),
+        cBody: "#FFF",
+        x: randPosCell(),
+        y: randPosCell(),
+      });
+
+    for (let i = 0; i < count + 5; i++) {
+      const cfg = configs[i] || { country: getRandomCountry(), cBody: "#FFF", x: 0, y: 0 };
+      gameState.current.players.push({
+        id: i,
+        active: true,
+        isSpectator: false, 
+        x: cfg.x,
+        y: cfg.y,
+        angle: -Math.PI / 2,
+        body: [],
+        length: 140,
+        dead: false,
+        country: cfg.country,
+        colorBody: cfg.cBody || "#fff",
+        scale: 18,
+        kills: 0,
+        deaths: 0,
+        frozenUntil: 0,
+        abilityActive: false,
+        lastAbilityTime: 0,
+        maplePhase: null,
+      });
+    }
+    if (isHostLocal) resetWorld(false);
+    setMenuState("playing");
   };
 
   const resetWorld = (spawnBots) => {
@@ -990,37 +1069,55 @@ export default function BosniaSnakeFixedRuntime() {
   function updateSinglePlayer() {
     const state = gameState.current;
     const p = state.players[0];
-    if (p && p.dead) {
+    if (p.dead) {
       if (keys.current["r"]) resetWorld(true);
       return;
     }
-
     state.enemies = state.enemies.filter((e) => e.alive);
     if (state.enemies.length < MAX_ENEMIES && Math.random() < 0.02)
       spawnOneEnemy();
 
     const inp = getLocalInput();
-    if (p) handlePhysics(p, inp);
+    handlePhysics(p, inp);
     updateAI();
-    if (p) updateEnvironment([p]);
+    updateEnvironment([p]);
   }
 
-  function updateSpectatorInterpolation() {
+  function updateMultiplayerHost() {
+    const state = gameState.current;
+    state.players.forEach((p, i) => {
+      if (!p.active || p.isSpectator) return;
+      let inp = i === 0 ? getLocalInput() : remoteInputs.current[i] || {};
+      if (p.dead) {
+        if (i === 0 && getLocalInput().respawn) respawnPlayer(p);
+        else if (inp.respawn) respawnPlayer(p);
+      } else {
+        handlePhysics(p, inp);
+      }
+    });
+
+    for (let i = 0; i < state.players.length; i++) {
+      for (let j = i + 1; j < state.players.length; j++) {
+        const pA = state.players[i],
+          pB = state.players[j];
+        if (!pA.active || !pB.active || pA.dead || pB.dead || pA.isSpectator || pB.isSpectator) continue;
+        if (coll(pA, pB, pA.scale + pB.scale)) {
+          killPlayer(pA, null);
+          killPlayer(pB, null);
+        } else if (checkBodyCollision(pA, pB)) killPlayer(pA, pB);
+        else if (checkBodyCollision(pB, pA)) killPlayer(pB, pA);
+      }
+    }
+    updateAI();
+    updateEnvironment(state.players.filter((p) => p.active && !p.isSpectator));
+  }
+
+  function updateMultiplayerClientInterpolation() {
     if (!serverState.current) return;
     const cur = gameState.current;
     const tar = serverState.current;
-
-    cur.food = tar.food.map((f) => ({
-      x: f.x,
-      y: f.y,
-      level: f.l,
-      isGolden: f.g === 1,
-    }));
-    cur.mines = tar.mines.map((m) => ({
-      ...m,
-      lastTick: m.lastTick || Date.now(),
-      timer: m.timer || 3,
-    }));
+    cur.food = tar.food.map((f) => ({ x: f.x, y: f.y, level: f.l, isGolden: f.g === 1 }));
+    cur.mines = tar.mines;
     cur.explosions = tar.explosions;
     cur.syrupZones = (tar.syrupZones || []).map((s) => ({
       x: s.x,
@@ -1041,22 +1138,25 @@ export default function BosniaSnakeFixedRuntime() {
       e.color = tE.color;
       e.width = tE.width;
       e.frozenUntil = tE.frozenUntil;
-      if (!e.body) e.body = [];
       if (e.alive) {
         e.body.unshift({ x: e.x, y: e.y });
         while (e.body.length > 140) e.body.pop();
       }
     });
 
-    if (cur.players.length !== tar.players.length)
-      cur.players = tar.players.map((p) => ({ ...p, body: [] }));
-
     cur.players.forEach((p, i) => {
       const tP = tar.players[i];
       if (!tP) return;
+      p.isSpectator = tP.isSpectator;
+      p.active = tP.active;
+      
       p.x = lerp(p.x, tP.x, INTERPOLATION_SPEED);
       p.y = lerp(p.y, tP.y, INTERPOLATION_SPEED);
       p.angle = lerpAngle(p.angle, tP.angle, INTERPOLATION_SPEED);
+
+      if (i === myPlayerIndex && tP.kills > p.kills)
+        updateStats({ kill: true });
+
       p.dead = tP.dead;
       p.scale = tP.scale;
       p.length = tP.length;
@@ -1065,12 +1165,15 @@ export default function BosniaSnakeFixedRuntime() {
       p.frozenUntil = tP.frozenUntil;
       p.abilityActive = tP.abilityActive;
       p.maplePhase = tP.maplePhase;
-      p.name = tP.name;
-      if (!p.body) p.body = [];
-      if (!p.dead) {
+
+      if (!p.dead && !p.isSpectator) {
         p.body.unshift({ x: p.x, y: p.y });
         while (p.body.length > p.length) p.body.pop();
       } else {
+        if (i === myPlayerIndex && !gameState.current.players[i].dead && tP.dead && !p.isSpectator) {
+          updateStats({ death: true, scale: p.scale, length: p.length });
+          submitScoreToLeaderboard(p.scale);
+        }
         p.body = [];
       }
       p.country = tP.country;
@@ -1083,11 +1186,7 @@ export default function BosniaSnakeFixedRuntime() {
     const now = Date.now();
 
     if (p.country === "soviet") {
-      if (
-        inp.sprint &&
-        !p.barrageActive &&
-        (!p.lastAbilityTime || now - p.lastAbilityTime > 60000)
-      ) {
+      if (inp.sprint && !p.barrageActive && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000)) {
         p.barrageActive = true;
         p.barrageEndTime = now + 2000;
         p.nextExplosionTime = now;
@@ -1103,14 +1202,16 @@ export default function BosniaSnakeFixedRuntime() {
           p.sovietBoost = true;
           if (now >= p.nextExplosionTime) {
             createExplosion(p.x, p.y, 3 * CELL);
-            gameState.current.shakeIntensity = Math.min(
-              60,
-              gameState.current.shakeIntensity + 10
-            );
+            gameState.current.shakeIntensity = Math.min(60, gameState.current.shakeIntensity + 10);
             p.nextExplosionTime = now + 200;
-            if (dist(p, gameState.current.players[0]) < 900)
+            if (dist(p, gameState.current.players[isSpectating ? spectateTargetIndex : myPlayerIndex] || {x:0, y:0}) < 900) {
               playSound("soviet_boom");
+            }
             const killRad = 3 * CELL;
+            gameState.current.players.forEach((v) => {
+              if (v.id !== p.id && !v.dead && !v.isSpectator && dist(v, p) < killRad)
+                killPlayer(v, p);
+            });
             gameState.current.enemies.forEach((e) => {
               if (e.alive && dist(e, p) < killRad) killEnemy(e, p);
             });
@@ -1120,15 +1221,13 @@ export default function BosniaSnakeFixedRuntime() {
     }
 
     if (p.country === "golden_maple") {
-      if (
-        inp.triggerAbility &&
-        (!p.lastAbilityTime || now - p.lastAbilityTime > 60000) &&
-        !p.maplePhase
-      ) {
+      if (inp.triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000) && !p.maplePhase) {
         p.maplePhase = "harvest";
         p.phaseEndTime = now + 2500;
         p.lastAbilityTime = now;
-        if (dist(p, gameState.current.players[0]) < 900) playSound("angelic");
+        if (dist(p, gameState.current.players[isSpectating ? spectateTargetIndex : myPlayerIndex] || {x:0,y:0}) < 900) {
+          playSound("angelic");
+        }
       }
       if (p.maplePhase === "harvest") {
         if (now > p.phaseEndTime) {
@@ -1143,15 +1242,17 @@ export default function BosniaSnakeFixedRuntime() {
           });
         }
       } else if (p.maplePhase === "syrup") {
-        if (now > p.phaseEndTime) p.maplePhase = null;
+        if (now > p.phaseEndTime) {
+          p.maplePhase = null;
+        }
       }
     }
 
     let speedMult = 1.0;
-    let turnMult = 1.0;
+    let turnMult = 1.0; 
     gameState.current.syrupZones.forEach((zone) => {
       if (dist(p, zone) < zone.radius && zone.ownerId !== p.id) {
-        speedMult = 0.4;
+        speedMult = 0.4; 
         turnMult = 0.33;
       }
     });
@@ -1167,10 +1268,7 @@ export default function BosniaSnakeFixedRuntime() {
     let s = BASE_SPEED * speedMult;
     if (p.id === myPlayerIndex && cheats.current.speedHack) s = BASE_SPEED * 3;
 
-    const canSprint =
-      inp.sprint &&
-      p.length > MIN_LENGTH &&
-      (!p.abilityActive || p.country === "soviet");
+    const canSprint = inp.sprint && p.length > MIN_LENGTH && (!p.abilityActive || p.country === "soviet");
     if (canSprint) {
       s *= 1.8;
       if (p.sovietBoost) s *= 2.0;
@@ -1197,13 +1295,9 @@ export default function BosniaSnakeFixedRuntime() {
     state.enemies.forEach((enemy) => {
       if (!enemy.alive) return;
       if (enemy.frozenUntil && now < enemy.frozenUntil) return;
-
-      // UPDATED: Aggressive AI Growth Logic
       if (!enemy.baseScale) enemy.baseScale = 12;
-      const currentCalculatedWidth =
-        12 + Math.min(60, (enemy.length - 140) / 8); // Faster width growth
-      if (currentCalculatedWidth > enemy.baseScale)
-        enemy.baseScale = currentCalculatedWidth;
+      const currentCalculatedWidth = 12 + Math.min(33, (enemy.length - 140) / 10);
+      if (currentCalculatedWidth > enemy.baseScale) enemy.baseScale = currentCalculatedWidth;
       enemy.width = enemy.baseScale;
 
       let aiSpeedMult = 1.0;
@@ -1211,14 +1305,14 @@ export default function BosniaSnakeFixedRuntime() {
       state.syrupZones.forEach((zone) => {
         if (dist(enemy, zone) < zone.radius) {
           aiSpeedMult = 0.4;
-          aiTurnMult = 0.33;
+          aiTurnMult = 0.33; 
         }
       });
 
       let target = null;
       let minDist = Infinity;
       state.players.forEach((p) => {
-        if (!p.dead && p.active) {
+        if (!p.dead && p.active && !p.isSpectator) {
           const d = dist(enemy, p);
           if (d < minDist) {
             minDist = d;
@@ -1248,7 +1342,7 @@ export default function BosniaSnakeFixedRuntime() {
       let minCritDist = 160;
 
       state.players.forEach((p) => {
-        if (!p.dead && p.active) {
+        if (!p.dead && p.active && !p.isSpectator) {
           for (let i = 0; i < p.body.length; i += 2) {
             const d = dist(enemy, p.body[i]);
             if (d < minCritDist && d < enemy.width + p.scale + 40) {
@@ -1258,7 +1352,6 @@ export default function BosniaSnakeFixedRuntime() {
           }
         }
       });
-
       state.enemies.forEach((e2) => {
         if (e2 !== enemy && e2.alive) {
           for (let i = 0; i < e2.body.length; i += 4) {
@@ -1272,10 +1365,8 @@ export default function BosniaSnakeFixedRuntime() {
       });
 
       if (criticalThreat) {
-        targetAngle = Math.atan2(
-          enemy.y - criticalThreat.y,
-          enemy.x - criticalThreat.x
-        );
+        const angleFromThreat = Math.atan2(enemy.y - criticalThreat.y, enemy.x - criticalThreat.x);
+        targetAngle = angleFromThreat;
         forceSprint = true;
       } else {
         let panicMine = null;
@@ -1297,15 +1388,16 @@ export default function BosniaSnakeFixedRuntime() {
           { angle: enemy.angle + 0.7, dist: viewDist, type: "right" },
         ];
 
-        let dangerLeft = 0,
-          dangerRight = 0,
-          blockedCenter = false;
+        let dangerLeft = 0;
+        let dangerRight = 0;
+        let blockedCenter = false;
+
         const checkPointDanger = (px, py) => {
           const limit = WORLD_SIZE / 2 - 100;
-          if (px < -limit || px > limit || py < -limit || py > limit)
-            return 300;
-          for (let m of state.mines)
+          if (px < -limit || px > limit || py < -limit || py > limit) return 300;
+          for (let m of state.mines) {
             if (dist({ x: px, y: py }, m) < 220) return 2000;
+          }
           return 0;
         };
 
@@ -1317,8 +1409,8 @@ export default function BosniaSnakeFixedRuntime() {
               enemy.y + Math.sin(f.angle) * (f.dist / steps) * s
             );
             if (danger > 0) {
-              if (f.type.includes("left")) dangerLeft += danger / s;
-              if (f.type.includes("right")) dangerRight += danger / s;
+              if (f.type.includes("left") || f.type.includes("Left")) dangerLeft += danger / s;
+              if (f.type.includes("right") || f.type.includes("Right")) dangerRight += danger / s;
               if (f.type === "center") blockedCenter = true;
             }
           }
@@ -1329,24 +1421,15 @@ export default function BosniaSnakeFixedRuntime() {
           else if (dangerRight > dangerLeft) targetAngle -= 2.5;
           else targetAngle += 3.0;
         } else if (panicMine) {
-          targetAngle = Math.atan2(
-            enemy.y - panicMine.y,
-            enemy.x - panicMine.x
-          );
+          targetAngle = Math.atan2(enemy.y - panicMine.y, enemy.x - panicMine.x);
           forceSprint = true;
         } else if (enemy.isEnraged && target) {
-          const playerSpeed =
-            target.length < target.length - 1 ? BASE_SPEED * 1.8 : BASE_SPEED;
+          const playerSpeed = target.length < target.length - 1 ? BASE_SPEED * 1.8 : BASE_SPEED;
           const lookAhead = Math.min(60, minDist / 5);
-          const predX =
-            target.x + Math.cos(target.angle) * playerSpeed * lookAhead;
-          const predY =
-            target.y + Math.sin(target.angle) * playerSpeed * lookAhead;
+          const predX = target.x + Math.cos(target.angle) * playerSpeed * lookAhead;
+          const predY = target.y + Math.sin(target.angle) * playerSpeed * lookAhead;
           targetAngle = Math.atan2(predY - enemy.y, predX - enemy.x);
-          if (
-            Math.abs(normalizeAngle(targetAngle - enemy.angle)) < 0.3 &&
-            minDist > 150
-          )
+          if (Math.abs(normalizeAngle(targetAngle - enemy.angle)) < 0.3 && minDist > 150)
             forceSprint = true;
         } else {
           let closestFood = null;
@@ -1359,26 +1442,21 @@ export default function BosniaSnakeFixedRuntime() {
             }
           });
           if (closestFood)
-            targetAngle = Math.atan2(
-              closestFood.y - enemy.y,
-              closestFood.x - enemy.x
-            );
+            targetAngle = Math.atan2(closestFood.y - enemy.y, closestFood.x - enemy.x);
         }
       }
 
       let diff = normalizeAngle(targetAngle - enemy.angle);
-      const turn =
-        (forceSprint ? enemy.turnSpeed * 1.5 : enemy.turnSpeed) * aiTurnMult;
+      const turn = (forceSprint ? enemy.turnSpeed * 1.5 : enemy.turnSpeed) * aiTurnMult;
 
       if (Math.abs(diff) < turn) enemy.angle = targetAngle;
       else if (diff > 0) enemy.angle += turn;
       else enemy.angle -= turn;
       enemy.angle = normalizeAngle(enemy.angle);
 
-      const spd =
-        (forceSprint && enemy.length > 145 ? enemy.boostSpeed : enemy.speed) *
-        aiSpeedMult;
-      if (forceSprint && enemy.length > 145) enemy.length -= 0.3;
+      const spd = (forceSprint && enemy.length > 145 ? enemy.boostSpeed : enemy.speed) * aiSpeedMult;
+
+      if (forceSprint && enemy.length > 145) enemy.length -= 0.3; 
 
       enemy.x += Math.cos(enemy.angle) * spd;
       enemy.y += Math.sin(enemy.angle) * spd;
@@ -1388,13 +1466,12 @@ export default function BosniaSnakeFixedRuntime() {
       for (let i = state.food.length - 1; i >= 0; i--) {
         if (coll(enemy, state.food[i], enemy.width + 10)) {
           state.food.splice(i, 1);
-          // UPDATED: Much faster growth for AI (+20 length per food)
-          enemy.length += 20;
+          enemy.length += 12;
         }
       }
 
       state.players.forEach((p) => {
-        if (!p.dead && p.active) {
+        if (!p.dead && p.active && !p.isSpectator) {
           if (coll(p, enemy, p.scale + enemy.width)) killPlayer(p, null);
           if (checkBodyCollision(p, enemy)) killPlayer(p, null);
           for (let j = 0; j < p.body.length; j += 2)
@@ -1408,7 +1485,6 @@ export default function BosniaSnakeFixedRuntime() {
   function updateEnvironment(active) {
     const s = gameState.current;
     const now = Date.now();
-
     for (let i = s.syrupZones.length - 1; i >= 0; i--) {
       if (now > s.syrupZones[i].expiresAt) s.syrupZones.splice(i, 1);
     }
@@ -1431,28 +1507,30 @@ export default function BosniaSnakeFixedRuntime() {
         });
       }
     });
+
     s.food.forEach((f, i) => {
       const foodLevel = f.level || 1;
       const rad = FOOD_RADIUS_BASE + foodLevel * 1.5;
+
       active.forEach((p) => {
-        if (!p.dead && coll(p, f, p.scale + rad)) {
-          if (p.id === myPlayerIndex) playSound("eat");
+        if (!p.dead && !p.isSpectator && coll(p, f, p.scale + rad)) {
+          if (p.id === myPlayerIndex) {
+            playSound("eat");
+          }
           s.food.splice(i, 1);
           const multiplier = f.isGolden ? 3 : 1;
           p.length += LENGTH_GAIN * multiplier;
-          p.scale = Math.min(
-            600,
-            p.scale + foodLevel * SIZE_GAIN_PER_LEVEL * multiplier
-          );
+          p.scale = Math.min(600, p.scale + foodLevel * SIZE_GAIN_PER_LEVEL * multiplier);
         }
       });
     });
+
     for (let i = s.mines.length - 1; i >= 0; i--) {
       let m = s.mines[i];
       if (m.state === "idle") {
         let triggered = false;
         active.forEach((p) => {
-          if (!p.dead && dist(p, m) < 200) triggered = true;
+          if (!p.dead && !p.isSpectator && dist(p, m) < 200) triggered = true;
         });
         if (triggered) {
           m.state = "triggered";
@@ -1462,7 +1540,7 @@ export default function BosniaSnakeFixedRuntime() {
         if (now - m.lastTick > m.timer * 1000) {
           createExplosion(m.x, m.y);
           active.forEach((p) => {
-            if (!p.dead && dist(p, m) < 300) killPlayer(p, null);
+            if (!p.dead && !p.isSpectator && dist(p, m) < 300) killPlayer(p, null);
           });
           s.mines.splice(i, 1);
         }
@@ -1479,23 +1557,30 @@ export default function BosniaSnakeFixedRuntime() {
   }
 
   function killPlayer(victim, killer) {
-    if (victim.dead) return;
+    if (victim.dead || victim.isSpectator) return;
     if (victim.id === myPlayerIndex && cheats.current.godMode) return;
     victim.dead = true;
     victim.deaths++;
     victim.abilityActive = false;
     victim.maplePhase = null;
+
     if (victim.id === myPlayerIndex) {
       updateStats({ death: true, scale: victim.scale, length: victim.length });
       submitScoreToLeaderboard(victim.scale);
     }
+
     if (killer) {
       killer.kills++;
-      if (killer.id === myPlayerIndex) updateStats({ kill: true });
+      if (killer.id === myPlayerIndex) {
+        updateStats({ kill: true });
+      }
     }
+
     createExplosion(victim.x, victim.y);
+
     const totalValue = victim.length * 0.4;
     const foodCount = Math.max(3, Math.floor(totalValue / LENGTH_GAIN));
+
     for (let k = 0; k < foodCount; k++) {
       const index = Math.floor(Math.random() * victim.body.length);
       if (victim.body[index])
@@ -1537,20 +1622,35 @@ export default function BosniaSnakeFixedRuntime() {
     return false;
   }
 
-  // --- RENDER ---
-  function renderGame(ctx, canvas, pIdx) {
+  function respawnPlayer(p) {
+    p.x = randPosCell();
+    p.y = randPosCell();
+    p.dead = false;
+    p.body = [];
+    p.length = 140;
+    p.scale = 18;
+    p.frozenUntil = 0;
+    p.abilityActive = false;
+    p.maplePhase = null;
+    p.barrageActive = false;
+    p.barrageStartTime = 0;
+    p.nextExplosionTime = 0;
+    p.sovietBoost = false;
+  }
+
+  function renderGame(ctx, canvas, targetIdx) {
     const state = gameState.current;
     const dpr = window.devicePixelRatio || 1;
-    const me = state.players[pIdx] ||
-      state.players[0] || { x: 0, y: 0, scale: 18, body: [] };
+    const target = state.players[targetIdx] || state.players[0];
+    const me = target || state.players[0];
+
     const startScale = 18;
     const zoom = Math.max(
       0.1,
       0.6 * (30 / (30 + (me.scale - startScale) * 0.4))
     );
 
-    let sx = 0,
-      sy = 0;
+    let sx = 0, sy = 0;
     if (state.shakeIntensity > 0) {
       sx = (Math.random() - 0.5) * state.shakeIntensity;
       sy = (Math.random() - 0.5) * state.shakeIntensity;
@@ -1594,11 +1694,19 @@ export default function BosniaSnakeFixedRuntime() {
           ctx.stroke();
         }
       });
+      state.players.forEach((p) => {
+        if (p.id !== me.id && p.active && !p.dead && !p.isSpectator) {
+          ctx.beginPath();
+          ctx.moveTo(me.x, me.y);
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+        }
+      });
       ctx.restore();
     }
 
     state.syrupZones.forEach((z) => {
-      ctx.fillStyle = "rgba(184, 134, 11, 0.5)";
+      ctx.fillStyle = "rgba(184, 134, 11, 0.5)"; 
       ctx.beginPath();
       ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
       ctx.fill();
@@ -1632,98 +1740,54 @@ export default function BosniaSnakeFixedRuntime() {
       }
     });
 
-    // UPDATED: SERBIAN MINES (With aggressive warning)
     state.mines.forEach((m) => {
-      const r = 35; // Mine Size
-
-      // WARNING FLASH (RED BLAST RADIUS)
-      if (m.state === "triggered") {
-        const timeElapsed = (Date.now() - m.lastTick) / 1000;
-        // Pulse faster as time runs out
-        const pulseSpeed = 150 - timeElapsed * 40; 
-        const pulse = (Date.now() % Math.max(50, pulseSpeed)) / Math.max(50, pulseSpeed);
-        
+      if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) {
+        ctx.fillStyle = "rgba(255,0,0,0.3)";
         ctx.beginPath();
-        // Expands as time goes on
-        ctx.arc(m.x, m.y, 300 * (timeElapsed / 3), 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 0, 0, ${0.1 + pulse * 0.3})`;
+        ctx.arc(m.x, m.y, 200, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = `rgba(255, 0, 0, ${0.5 + pulse * 0.5})`;
-        ctx.lineWidth = 3;
-        ctx.stroke();
       }
-
+      const r = 25;
+      const d = r * 2;
       ctx.save();
-      // Circular clip for the mine body
       ctx.beginPath();
       ctx.arc(m.x, m.y, r, 0, Math.PI * 2);
       ctx.clip();
-
-      // SERBIA FLAG COLORS
-      const serbRed = "#C6363C";
-      const serbBlue = "#0C4076";
-      const serbWhite = "#FFFFFF";
-
-      // Top Red
-      ctx.fillStyle = serbRed;
-      ctx.fillRect(m.x - r, m.y - r, r * 2, (r * 2) / 3);
-      // Mid Blue
-      ctx.fillStyle = serbBlue;
-      ctx.fillRect(m.x - r, m.y - r + (r * 2) / 3, r * 2, (r * 2) / 3);
-      // Bot White
-      ctx.fillStyle = serbWhite;
-      ctx.fillRect(m.x - r, m.y - r + (2 * (r * 2)) / 3, r * 2, (r * 2) / 3);
-
-      // SERBIAN CREST (Simplified) on the left
-      const cx = m.x - r * 0.3;
-      const cy = m.y;
-      const cr = r * 0.45;
-      // White Eagle Body
+      ctx.fillStyle = "#C6363C";
+      ctx.fillRect(m.x - r, m.y - r, d, d / 3);
+      ctx.fillStyle = "#0C4076";
+      ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3);
       ctx.fillStyle = "white";
       ctx.beginPath();
-      ctx.moveTo(cx, cy - cr); // Top
-      ctx.quadraticCurveTo(cx + cr, cy - cr * 0.5, cx + cr, cy); // Right wing
-      ctx.quadraticCurveTo(cx, cy + cr, cx, cy + cr); // Bottom
-      ctx.quadraticCurveTo(cx - cr, cy, cx - cr, cy); // Left wing
+      ctx.moveTo(m.x - 10, m.y - 10);
+      ctx.lineTo(m.x, m.y - 10);
+      ctx.lineTo(m.x, m.y + 5);
+      ctx.lineTo(m.x - 5, m.y + 12);
+      ctx.lineTo(m.x - 10, m.y + 5);
       ctx.fill();
-      // Red Shield
-      ctx.fillStyle = serbRed;
+      ctx.fillStyle = "#C6363C";
       ctx.beginPath();
-      ctx.rect(cx - cr * 0.4, cy - cr * 0.2, cr * 0.8, cr * 0.6);
+      ctx.moveTo(m.x - 8, m.y - 8);
+      ctx.lineTo(m.x - 2, m.y - 8);
+      ctx.lineTo(m.x - 2, m.y + 3);
+      ctx.lineTo(m.x - 5, m.y + 8);
+      ctx.lineTo(m.x - 8, m.y + 3);
       ctx.fill();
-
       ctx.restore();
-
-      // Border
       ctx.strokeStyle = m.state === "triggered" ? "red" : "#333";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(m.x, m.y, r, 0, Math.PI * 2);
       ctx.stroke();
-
-      // COUNTDOWN WARNING TEXT
-      if (m.state === "triggered") {
-        const remaining = Math.max(
-          0,
-          (3.0 - (Date.now() - m.lastTick) / 1000).toFixed(1)
-        );
-        ctx.fillStyle = "white";
-        ctx.strokeStyle = "black";
-        ctx.lineWidth = 4;
-        ctx.font = "bold 24px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.strokeText(remaining, m.x, m.y);
-        ctx.fillText(remaining, m.x, m.y);
-      }
     });
 
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    // Players
     state.players.forEach((pl) => {
-      if (!pl.active || pl.dead) return;
+      if (!pl.active || pl.dead || pl.isSpectator) return;
       if (pl.frozenUntil && Date.now() < pl.frozenUntil) {
         ctx.shadowBlur = 15;
         ctx.shadowColor = "cyan";
@@ -1741,26 +1805,10 @@ export default function BosniaSnakeFixedRuntime() {
         ctx.arc(pl.x, pl.y, 5 * CELL, 0, Math.PI * 2);
         ctx.stroke();
       }
+
       ctx.lineWidth = pl.scale * 1.2;
-
-      // BODY COLOR LOGIC
-      if (pl.country === "golden_maple") {
-        // Dynamic Gold Shine Gradient for Body
-        const gradient = ctx.createLinearGradient(
-          pl.x - 50,
-          pl.y - 50,
-          pl.x + 50,
-          pl.y + 50
-        );
-        gradient.addColorStop(0, "#B8860B"); // Dark Goldenrod
-        gradient.addColorStop(0.5, "#FFD700"); // Gold
-        gradient.addColorStop(1, "#DAA520"); // Goldenrod
-        ctx.strokeStyle = gradient;
-      } else {
-        ctx.strokeStyle =
-          pl.frozenUntil && Date.now() < pl.frozenUntil ? "cyan" : pl.colorBody;
-      }
-
+      ctx.strokeStyle =
+        pl.frozenUntil && Date.now() < pl.frozenUntil ? "cyan" : pl.colorBody;
       ctx.beginPath();
       if (pl.body.length) {
         ctx.moveTo(pl.body[0].x, pl.body[0].y);
@@ -1769,7 +1817,6 @@ export default function BosniaSnakeFixedRuntime() {
       }
       ctx.shadowBlur = 0;
 
-      // HEAD RENDERING
       const r = pl.scale * 0.65;
       ctx.save();
       ctx.translate(pl.x, pl.y);
@@ -1814,69 +1861,6 @@ export default function BosniaSnakeFixedRuntime() {
         ctx.fillRect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2);
         ctx.fillStyle = "#EF4135";
         ctx.fillRect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2);
-      } else if (pl.country === "italy") {
-        ctx.fillStyle = "#008C45";
-        ctx.fillRect(-r, -r, (r * 2) / 3, r * 2);
-        ctx.fillStyle = "white";
-        ctx.fillRect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2);
-        ctx.fillStyle = "#CD212A";
-        ctx.fillRect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2);
-      } else if (pl.country === "poland") {
-        ctx.fillStyle = "white";
-        ctx.fillRect(-r, -r, r * 2, r); // Top half
-        ctx.fillStyle = "#DC143C";
-        ctx.fillRect(-r, 0, r * 2, r); // Bottom half
-      } else if (pl.country === "sweden") {
-        ctx.fillStyle = "#006AA7"; // Blue
-        ctx.fillRect(-r, -r, r * 2, r * 2);
-        ctx.fillStyle = "#FECC00"; // Yellow
-        ctx.fillRect(-r, -r * 0.2, r * 2, r * 0.4); // Horiz
-        ctx.fillRect(-r * 0.2, -r, r * 0.4, r * 2); // Vert
-      } else if (pl.country === "denmark") {
-        ctx.fillStyle = "#C60C30"; // Red
-        ctx.fillRect(-r, -r, r * 2, r * 2);
-        ctx.fillStyle = "white";
-        ctx.fillRect(-r, -r * 0.2, r * 2, r * 0.4); // Horiz
-        ctx.fillRect(-r * 0.2, -r, r * 0.4, r * 2); // Vert
-      } else if (pl.country === "uk") {
-        ctx.fillStyle = "#012169"; // Blue
-        ctx.fillRect(-r, -r, r * 2, r * 2);
-        // White Cross
-        ctx.fillStyle = "white";
-        ctx.fillRect(-r, -r * 0.3, r * 2, r * 0.6);
-        ctx.fillRect(-r * 0.3, -r, r * 0.6, r * 2);
-        // White Diagonals (Simplified)
-        ctx.save();
-        ctx.rotate(Math.PI / 4);
-        ctx.fillRect(-r * 2, -r * 0.15, r * 4, r * 0.3);
-        ctx.rotate(Math.PI / 2);
-        ctx.fillRect(-r * 2, -r * 0.15, r * 4, r * 0.3);
-        ctx.restore();
-        // Red Cross
-        ctx.fillStyle = "#C8102E";
-        ctx.fillRect(-r, -r * 0.15, r * 2, r * 0.3);
-        ctx.fillRect(-r * 0.15, -r, r * 0.3, r * 2);
-      } else if (pl.country === "usa") {
-        // White Base
-        ctx.fillStyle = "white";
-        ctx.fillRect(-r, -r, r * 2, r * 2);
-        // Red Stripes
-        ctx.fillStyle = "#B22234";
-        for (let i = 0; i < 7; i++) {
-          ctx.fillRect(-r, -r + (i * 2 * r) / 7, r * 2, r / 7);
-        }
-        // Blue Canton (Top Left)
-        ctx.fillStyle = "#3C3B6E";
-        ctx.fillRect(-r, -r, r, r * 0.8);
-        // Stars (Simple Dots)
-        ctx.fillStyle = "white";
-        for (let py = 0; py < 3; py++) {
-          for (let px = 0; px < 4; px++) {
-            ctx.beginPath();
-            ctx.arc(-r + 10 + px * 15, -r + 10 + py * 15, 2, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
       } else if (pl.country === "ireland") {
         ctx.fillStyle = "#169B62";
         ctx.fillRect(-r, -r, (r * 2) / 3, r * 2);
@@ -1884,156 +1868,47 @@ export default function BosniaSnakeFixedRuntime() {
         ctx.fillRect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2);
         ctx.fillStyle = "#FF883E";
         ctx.fillRect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2);
-
-        // --- UPDATED CANADA SKIN (EXACT FLAG) ---
       } else if (pl.country === "canada") {
-        // 1:2:1 Proportions
-        // Total width = 2r.
-        // Side bars = 1/4 of total width each = 0.5r. Center = 0.5 width = r.
+        ctx.fillStyle = "#FF0000";
+        ctx.fillRect(-r, -r, (r * 2) / 4, r * 2);
         ctx.fillStyle = "#FFFFFF";
-        ctx.fillRect(-r, -r, r * 2, r * 2); // White background
+        ctx.fillRect(-r + (r * 2) / 4, -r, r, r * 2);
         ctx.fillStyle = "#FF0000";
-        ctx.fillRect(-r, -r, r * 0.5, r * 2); // Left Red
-        ctx.fillStyle = "#FF0000";
-        ctx.fillRect(r * 0.5, -r, r * 0.5, r * 2); // Right Red
-
-        // Detailed 11-point Maple Leaf
+        ctx.fillRect(r / 2, -r, (r * 2) / 4, r * 2);
         ctx.fillStyle = "#FF0000";
         ctx.beginPath();
-        // Move to top center tip
-        ctx.moveTo(0, -r * 0.45);
-        // Top Right lobe
-        ctx.lineTo(r * 0.1, -r * 0.25);
-        ctx.lineTo(r * 0.2, -r * 0.35);
-        ctx.lineTo(r * 0.22, -r * 0.15);
-        // Bottom Right lobe
-        ctx.lineTo(r * 0.35, -r * 0.1);
-        ctx.lineTo(r * 0.25, 0.05);
-        ctx.lineTo(r * 0.25, 0.25);
-        // Stem right side
-        ctx.lineTo(r * 0.05, 0.25);
-        ctx.lineTo(r * 0.05, 0.45);
-        // Stem left side
-        ctx.lineTo(-r * 0.05, 0.45);
-        ctx.lineTo(-r * 0.05, 0.25);
-        // Bottom Left lobe
-        ctx.lineTo(-r * 0.25, 0.25);
-        ctx.lineTo(-r * 0.25, 0.05);
-        ctx.lineTo(-r * 0.35, -r * 0.1);
-        // Top Left lobe
-        ctx.lineTo(-r * 0.22, -r * 0.15);
-        ctx.lineTo(-r * 0.2, -r * 0.35);
-        ctx.lineTo(-r * 0.1, -r * 0.25);
-        ctx.closePath();
+        ctx.moveTo(0, -r * 0.4);
+        ctx.lineTo(r * 0.3, 0);
+        ctx.lineTo(0, r * 0.4);
+        ctx.lineTo(-r * 0.3, 0);
         ctx.fill();
       } else if (pl.country === "ukraine") {
         ctx.fillStyle = "#0057B8";
         ctx.fillRect(-r, -r, r * 2, r);
         ctx.fillStyle = "#FFD700";
         ctx.fillRect(-r, 0, r * 2, r);
-
-        // --- UPDATED SOVIET SKIN (EXACT FLAG) ---
       } else if (pl.country === "soviet") {
-        // Red Background
         ctx.fillStyle = "#CC0000";
         ctx.fillRect(-r, -r, r * 2, r * 2);
-
-        // Gold Star (Centered above Hammer & Sickle)
         ctx.fillStyle = "#FFD700";
         ctx.beginPath();
-        const sx = 0,
-          sy = -r * 0.35;
-        const outer = r * 0.12,
-          inner = r * 0.05;
-        let rot = (Math.PI / 2) * 3;
-        const step = Math.PI / 5;
-        ctx.moveTo(sx, sy - outer);
-        for (let i = 0; i < 5; i++) {
-          ctx.lineTo(sx + Math.cos(rot) * outer, sy + Math.sin(rot) * outer);
-          rot += step;
-          ctx.lineTo(sx + Math.cos(rot) * inner, sy + Math.sin(rot) * inner);
-          rot += step;
-        }
-        ctx.closePath();
+        ctx.arc(-r * 0.4, -r * 0.4, r * 0.25, 0, Math.PI * 2);
         ctx.fill();
-
-        // Hammer and Sickle
         ctx.strokeStyle = "#FFD700";
-        ctx.lineWidth = r * 0.08;
-        ctx.lineCap = "butt";
-
-        // Sickle (Arc)
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(-r * 0.05, r * 0.1, r * 0.25, 0.8 * Math.PI, 2.2 * Math.PI);
+        ctx.arc(-r * 0.4, -r * 0.2, r * 0.2, 0, Math.PI);
         ctx.stroke();
-        // Sickle Handle
-        ctx.beginPath();
-        ctx.moveTo(-r * 0.05, r * 0.35);
-        ctx.lineTo(-r * 0.05, r * 0.5);
-        ctx.stroke();
-
-        // Hammer
-        ctx.save();
-        ctx.translate(r * 0.05, r * 0.1);
-        ctx.rotate(-Math.PI / 4);
-        ctx.fillStyle = "#FFD700";
-        ctx.fillRect(-r * 0.04, -r * 0.3, r * 0.08, r * 0.5); // Handle
-        ctx.fillRect(-r * 0.12, -r * 0.3, r * 0.24, r * 0.08); // Head
-        ctx.restore();
-
-        // --- UPDATED GOLDEN MAPLE SKIN (SHINY) ---
       } else if (pl.country === "golden_maple") {
-        // Golden Shine Gradient Background
-        const grad = ctx.createLinearGradient(-r, -r, r, r);
-        grad.addColorStop(0, "#FFD700");
-        grad.addColorStop(0.5, "#F0E68C");
-        grad.addColorStop(1, "#DAA520");
-        ctx.fillStyle = grad;
-        ctx.fillRect(-r, -r, r * 2, r * 2);
-
-        // Darker Gold Side Bars (1:2:1)
-        const barColor = "rgba(184, 134, 11, 0.9)";
-        ctx.fillStyle = barColor;
-        ctx.fillRect(-r, -r, r * 0.5, r * 2);
-        ctx.fillRect(r * 0.5, -r, r * 0.5, r * 2);
-
-        // Shiny Metallic Leaf (Using Canada Path)
-        // Create metallic gradient for leaf
-        const leafGrad = ctx.createLinearGradient(0, -r, 0, r);
-        leafGrad.addColorStop(0, "#B8860B");
-        leafGrad.addColorStop(0.5, "#DAA520");
-        leafGrad.addColorStop(1, "#8B4513");
-        ctx.fillStyle = leafGrad;
-
+        ctx.fillStyle = "#DAA520";
+        ctx.fillRect(-r, -r, r * 2, r * 2); 
+        ctx.fillStyle = "#B22222";
         ctx.beginPath();
-        ctx.moveTo(0, -r * 0.45);
-        ctx.lineTo(r * 0.1, -r * 0.25);
-        ctx.lineTo(r * 0.2, -r * 0.35);
-        ctx.lineTo(r * 0.22, -r * 0.15);
-        ctx.lineTo(r * 0.35, -r * 0.1);
-        ctx.lineTo(r * 0.25, 0.05);
-        ctx.lineTo(r * 0.25, 0.25);
-        ctx.lineTo(r * 0.05, 0.25);
-        ctx.lineTo(r * 0.05, 0.45);
-        ctx.lineTo(-r * 0.05, 0.45);
-        ctx.lineTo(-r * 0.05, 0.25);
-        ctx.lineTo(-r * 0.25, 0.25);
-        ctx.lineTo(-r * 0.25, 0.05);
-        ctx.lineTo(-r * 0.35, -r * 0.1);
-        ctx.lineTo(-r * 0.22, -r * 0.15);
-        ctx.lineTo(-r * 0.2, -r * 0.35);
-        ctx.lineTo(-r * 0.1, -r * 0.25);
-        ctx.closePath();
+        ctx.moveTo(0, -r * 0.5);
+        ctx.lineTo(r * 0.3, 0);
+        ctx.lineTo(0, r * 0.5);
+        ctx.lineTo(-r * 0.3, 0);
         ctx.fill();
-
-        // Add a "shine" circle
-        ctx.save();
-        ctx.globalAlpha = 0.4;
-        ctx.fillStyle = "white";
-        ctx.beginPath();
-        ctx.arc(-r * 0.2, -r * 0.2, r * 0.3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
       } else {
         ctx.fillStyle = pl.colorBody || "white";
         ctx.fillRect(-r, -r, r * 2, r * 2);
@@ -2067,89 +1942,94 @@ export default function BosniaSnakeFixedRuntime() {
 
     ctx.restore();
 
+    // --- HUD ---
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // SPECTATOR OVERLAY
+    if (isSpectating) {
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(0, canvas.height/dpr - 80, canvas.width/dpr, 80);
+        
+        ctx.fillStyle = "white";
+        ctx.font = "bold 20px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(`SPECTATING: Player ${targetIdx}`, canvas.width/dpr/2, canvas.height/dpr - 45);
+        
+        ctx.font = "14px Arial";
+        ctx.fillStyle = "#ccc";
+        ctx.fillText("Use Arrow Keys to Switch Players", canvas.width/dpr/2, canvas.height/dpr - 25);
+    }
 
     if (!me.dead && !isSpectating) {
       const hudW = 220;
       const hudH = 50;
       const hudX = 20;
       const hudY = 20;
+
       ctx.fillStyle = "rgba(0, 15, 60, 0.7)";
       ctx.strokeStyle = "#0055A4";
       ctx.lineWidth = 2;
       ctx.roundRect(hudX, hudY, hudW, hudH, 10);
       ctx.fill();
       ctx.stroke();
+
       ctx.fillStyle = "white";
       ctx.font = "bold 22px Arial";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillText(`Size: ${me.scale.toFixed(1)}`, hudX + 15, hudY + hudH / 2);
+
       ctx.font = "bold 14px Arial";
       ctx.fillStyle = "#FECB00";
       ctx.textAlign = "right";
       ctx.fillText(`Kills: ${me.kills}`, hudX + hudW - 15, hudY + hudH / 2);
     }
 
-    if (isSpectating) {
-      ctx.fillStyle = "rgba(0,0,0,0.5)";
-      ctx.fillRect(0, canvas.height / dpr - 40, canvas.width / dpr, 40);
-      ctx.fillStyle = "white";
-      ctx.font = "20px Arial";
-      ctx.textAlign = "center";
-      ctx.fillText(
-        `SPECTATING: ${me.name || "Unknown"}`,
-        canvas.width / dpr / 2,
-        canvas.height / dpr - 12
-      );
-    }
-
-    if (
-      !me.dead &&
-      ["soviet", "golden_maple"].includes(me.country) &&
-      !isSpectating
-    ) {
+    if (!me.dead && !isSpectating && ["soviet", "golden_maple"].includes(me.country)) {
       const cooldown = 60000;
       const timeSince = Date.now() - (me.lastAbilityTime || 0);
-      const isActive = me.barrageActive || !!me.maplePhase;
+      const isSovietActive = me.barrageActive;
+      const isMapleActive = !!me.maplePhase;
+      const isActive = isSovietActive || isMapleActive;
+
       let displayText = "READY";
-      let displayColor = "#FFD700";
+      let displayColor = "#FFD700"; 
       let progress = 1;
+
       if (isActive) {
         displayText = "ACTIVE";
-        displayColor = "#00FF00";
+        displayColor = "#00FF00"; 
         if (Math.floor(Date.now() / 200) % 2 === 0) displayColor = "#FFFFFF";
       } else if (timeSince < cooldown) {
         const remaining = Math.ceil((cooldown - timeSince) / 1000);
         displayText = remaining + "s";
-        displayColor = "#AAAAAA";
+        displayColor = "#AAAAAA"; 
         progress = timeSince / cooldown;
       }
+
       const cw = canvas.width / dpr;
       const ch = canvas.height / dpr;
       const radius = 40;
       const cx = cw - 60;
       const cy = ch - 60;
+
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(0,0,0,0.6)";
       ctx.fill();
+
       ctx.beginPath();
-      ctx.arc(
-        cx,
-        cy,
-        radius - 5,
-        -Math.PI / 2,
-        -Math.PI / 2 + Math.PI * 2 * progress
-      );
+      ctx.arc(cx, cy, radius - 5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
       ctx.strokeStyle = displayColor;
       ctx.lineWidth = 5;
       ctx.stroke();
+
       ctx.fillStyle = displayColor;
       ctx.font = "bold 16px Arial";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(displayText, cx, cy);
+
       ctx.fillStyle = "white";
       ctx.font = "12px Arial";
       ctx.fillText("ABILITY", cx, cy + radius + 15);
@@ -2164,34 +2044,17 @@ export default function BosniaSnakeFixedRuntime() {
         canvas.width / dpr / 2,
         canvas.height / dpr / 2 - 50
       );
-      // UPDATED: CLICK TO RESPAWN VISUAL
       ctx.font = "20px Arial";
       ctx.fillText(
-        "Press R or Click to Restart",
+        state.mode === "single"
+          ? "Press R to Restart"
+          : "Press SPACE to Respawn",
         canvas.width / dpr / 2,
         canvas.height / dpr / 2
-      );
-      ctx.beginPath();
-      ctx.rect(
-        canvas.width / dpr / 2 - 100,
-        canvas.height / dpr / 2 + 20,
-        200,
-        50
-      );
-      ctx.strokeStyle = "white";
-      ctx.stroke();
-      ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
-      ctx.fill();
-      ctx.fillStyle = "#FECB00";
-      ctx.fillText(
-        "RESPAWN",
-        canvas.width / dpr / 2,
-        canvas.height / dpr / 2 + 52
       );
     }
   }
 
-  // --- STYLES ---
   const styles = {
     wrapper: {
       position: "fixed",
@@ -2339,6 +2202,46 @@ export default function BosniaSnakeFixedRuntime() {
       padding: "12px 0",
       borderBottom: "1px solid rgba(255,255,255,0.1)",
     },
+    multiMenuContainer: {
+      marginTop: "15px",
+      background: "rgba(20, 20, 25, 0.9)",
+      padding: "15px",
+      borderRadius: "5px",
+      border: "1px solid #333",
+    },
+    roomButtonRow: { display: "flex", gap: "10px", marginBottom: "10px" },
+    roomButton: {
+      flex: 1,
+      padding: "10px",
+      background: "#444",
+      border: "none",
+      borderRadius: "4px",
+      color: "white",
+      cursor: "pointer",
+      fontSize: "13px",
+      fontWeight: "bold",
+    },
+    joinRow: { display: "flex", gap: "10px" },
+    idInput: {
+      flex: 2,
+      padding: "10px",
+      background: "#111",
+      border: "1px solid #333",
+      color: "white",
+      fontSize: "14px",
+      borderRadius: "4px",
+      outline: "none",
+    },
+    joinButton: {
+      flex: 1,
+      background: "#28a745",
+      border: "none",
+      color: "white",
+      fontSize: "13px",
+      cursor: "pointer",
+      borderRadius: "4px",
+      fontWeight: "bold",
+    },
     categoryToggle: { display: "flex", marginBottom: "10px", gap: "5px" },
     catBtn: (active) => ({
       flex: 1,
@@ -2351,98 +2254,65 @@ export default function BosniaSnakeFixedRuntime() {
       fontWeight: "bold",
       cursor: "pointer",
     }),
-    chatContainer: {
-      position: "absolute",
-      bottom: "10px",
-      left: "10px",
-      width: "300px",
-      height: "200px",
-      display: "flex",
-      flexDirection: "column",
-      pointerEvents: "auto",
-      zIndex: 999,
+    browserModal: {
+      position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
+      background: "rgba(0,0,0,0.8)", zIndex: 1000, display: "flex", justifyContent: "center", alignItems: "center"
     },
-    chatMessages: {
-      flex: 1,
-      overflowY: "hidden",
-      display: "flex",
-      flexDirection: "column",
-      justifyContent: "flex-end",
-      textShadow: "1px 1px 2px black",
-      marginBottom: "5px",
+    browserContent: {
+      width: "600px", height: "500px", background: "#111", border: "2px solid #FECB00",
+      borderRadius: "10px", padding: "20px", display: "flex", flexDirection: "column"
     },
-    chatLine: {
-      fontSize: "14px",
-      marginBottom: "2px",
-      background: "rgba(0,0,0,0.3)",
-      padding: "2px 5px",
-      borderRadius: "4px",
+    gameList: {
+      flex: 1, overflowY: "auto", marginTop: "15px", border: "1px solid #333", borderRadius: "5px"
     },
-    chatInput: {
-      background: "rgba(0,0,0,0.5)",
-      border: "1px solid #555",
-      color: "white",
-      padding: "8px",
-      borderRadius: "4px",
-      outline: "none",
-    },
-    spectateRow: {
-      padding: "10px",
-      background: "#222",
-      marginBottom: "5px",
-      borderRadius: "5px",
-      cursor: "pointer",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-    },
+    gameItem: {
+      display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px",
+      borderBottom: "1px solid #333", background: "#222"
+    }
   };
 
   const currentSkins = skinCategory === "normal" ? SKINS_NORMAL : SKINS_SPECIAL;
+  const hasLiveGames = activeGames.length > 0;
 
   return (
     <div style={styles.wrapper}>
-      <div
-        style={{
-          position: "absolute",
-          top: "20px",
-          width: "100%",
-          textAlign: "center",
-          color: "white",
-          fontSize: "30px",
-          fontWeight: "bold",
-          zIndex: 100,
-          textShadow: "0px 0px 5px black",
-          pointerEvents: "none",
-        }}
-      >
-        {menuState === "playing" ? (isSpectating ? "SPECTATOR MODE" : "") : ""}
-      </div>
-
-      {menuState === "playing" && (
-        <div style={styles.chatContainer}>
-          <div style={styles.chatMessages}>
-            {chatMessages.map((msg, i) => (
-              <div key={i} style={styles.chatLine}>
-                <span style={{ color: msg.color, fontWeight: "bold" }}>
-                  {msg.name}:{" "}
-                </span>
-                <span>{msg.text}</span>
-              </div>
-            ))}
-          </div>
-          <form onSubmit={handleSendChat}>
-            <input
-              style={styles.chatInput}
-              placeholder="Type to chat..."
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-            />
-          </form>
-        </div>
-      )}
-
       <canvas ref={canvasRef} style={{ display: "block" }} />
+
+      {/* NEW SPECTATE BROWSER MODAL */}
+      {showSpectateBrowser && (
+          <div style={styles.browserModal}>
+              <div style={styles.browserContent}>
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+                      <h2 style={{margin:0, color:"#FECB00"}}>LIVE GAMES</h2>
+                      <button onClick={()=>setShowSpectateBrowser(false)} style={{background:"red", color:"white", border:"none", padding:"5px 10px", cursor:"pointer"}}>X</button>
+                  </div>
+                  <div style={styles.gameList}>
+                      {activeGames.length === 0 && <div style={{padding:"20px", color:"#777", textAlign:"center"}}>No active games found. Start playing to appear here!</div>}
+                      {activeGames.map(game => (
+                          <div key={game.id} style={styles.gameItem}>
+                              <div>
+                                  <div style={{fontWeight:"bold", color:"white"}}>{game.hostName || "Unknown"}</div>
+                                  <div style={{fontSize:"12px", color:"#aaa"}}>
+                                      {game.mode === 'single' ? 'Solo' : 'Multiplayer'} | Players: {game.players || 1}
+                                  </div>
+                              </div>
+                              <div style={{display:"flex", alignItems:"center", gap:"15px"}}>
+                                  <div style={{textAlign:"right"}}>
+                                      <div style={{color:"#4caf50", fontWeight:"bold"}}>Size {Math.round(game.size || 18)}</div>
+                                  </div>
+                                  <button 
+                                    onClick={() => initSpectate(game.id)}
+                                    style={{background:"#8A2BE2", color:"white", border:"none", padding:"8px 15px", borderRadius:"4px", cursor:"pointer", fontWeight:"bold"}}
+                                  >
+                                      WATCH
+                                  </button>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      )}
 
       {menuState === "start" && (
         <div style={styles.clusterContainer}>
@@ -2552,6 +2422,7 @@ export default function BosniaSnakeFixedRuntime() {
             >
               SELECT SKIN
             </div>
+
             <div style={styles.categoryToggle}>
               <button
                 onClick={() => setSkinCategory("normal")}
@@ -2617,77 +2488,58 @@ export default function BosniaSnakeFixedRuntime() {
             <button onClick={initSinglePlayer} style={styles.btn("blue")}>
               PLAY SOLO
             </button>
-
-            <div
+            <button
+              onClick={() => setShowMultiMenu(!showMultiMenu)}
+              style={styles.btn("red")}
+            >
+              MULTIPLAYER
+            </button>
+            <button
+              onClick={() => setShowSpectateBrowser(true)}
               style={{
-                marginTop: "20px",
-                borderTop: "1px solid #333",
-                paddingTop: "15px",
+                  ...styles.btn("blue"), 
+                  background: hasLiveGames 
+                    ? "linear-gradient(to right, #00C853, #007E33)" // Green if games exist
+                    : "linear-gradient(to right, #555, #333)",     // Grey if no games
+                  opacity: hasLiveGames ? 1 : 0.7
               }}
             >
-              <div
-                style={{
-                  color: "#FECB00",
-                  fontWeight: "bold",
-                  marginBottom: "10px",
-                  fontSize: "14px",
-                }}
-              >
-                LIVE GAMES (Click to Spectate){" "}
-                {isScanning && (
-                  <span style={{ fontSize: "10px", color: "#666" }}>
-                    (Scanning...)
-                  </span>
-                )}
+              SPECTATE LIVE ({activeGames.length})
+            </button>
+
+            {showMultiMenu && (
+              <div style={styles.multiMenuContainer}>
+                <div style={styles.roomButtonRow}>
+                  <button
+                    onClick={() => handleQuickPlay(1)}
+                    style={styles.roomButton}
+                  >
+                    Room 1
+                  </button>
+                  <button
+                    onClick={() => handleQuickPlay(2)}
+                    style={styles.roomButton}
+                  >
+                    Room 2
+                  </button>
+                </div>
+                <div style={styles.joinRow}>
+                  <input
+                    type="text"
+                    placeholder="Room ID"
+                    value={connectId}
+                    onChange={(e) => setConnectId(e.target.value)}
+                    style={styles.idInput}
+                  />
+                  <button
+                    onClick={() => initHost(connectId)}
+                    style={styles.joinButton}
+                  >
+                    JOIN
+                  </button>
+                </div>
               </div>
-              {spectateList.length === 0 ? (
-                <div
-                  style={{
-                    color: "#666",
-                    fontSize: "12px",
-                    fontStyle: "italic",
-                  }}
-                >
-                  No active single player games found. Start one!
-                </div>
-              ) : (
-                <div style={{ maxHeight: "120px", overflowY: "auto" }}>
-                  {spectateList.map((game) => (
-                    <div
-                      key={game.id}
-                      style={styles.spectateRow}
-                      onClick={() => initSpectate(game.id)}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            fontWeight: "bold",
-                            fontSize: "13px",
-                            color: "white",
-                          }}
-                        >
-                          {game.host || "Unknown Player"}
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#888" }}>
-                          Playing Solo
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          background: "#28a745",
-                          color: "white",
-                          fontSize: "10px",
-                          padding: "3px 6px",
-                          borderRadius: "3px",
-                        }}
-                      >
-                        WATCH
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
           <div style={styles.leaderboardPanel}>
@@ -2733,6 +2585,64 @@ export default function BosniaSnakeFixedRuntime() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {menuState === "multi_lobby" && (
+        <div
+          style={{
+            ...styles.mainMenu,
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <div style={styles.headerText}>LOBBY</div>
+          <div
+            style={{
+              background: "#111",
+              padding: "20px",
+              borderRadius: "5px",
+              textAlign: "center",
+              marginBottom: "20px",
+            }}
+          >
+            <div style={{ fontSize: "12px", color: "#aaa" }}>YOUR ROOM ID</div>
+            <div
+              style={{
+                color: "#FECB00",
+                fontSize: "22px",
+                fontWeight: "bold",
+                userSelect: "all",
+                marginTop: "5px",
+              }}
+            >
+              {myId}
+            </div>
+          </div>
+          <div
+            style={{
+              textAlign: "center",
+              marginBottom: "25px",
+              color: "white",
+              fontSize: "18px",
+            }}
+          >
+            Players:{" "}
+            <span style={{ fontWeight: "bold", color: "#4caf50" }}>
+              {lobbyCount}
+            </span>
+          </div>
+          {isHost ? (
+            <button onClick={handleHostStart} style={styles.btn("blue")}>
+              START GAME
+            </button>
+          ) : (
+            <div style={{ textAlign: "center", color: "#aaa" }}>
+              Waiting for host...
+            </div>
+          )}
         </div>
       )}
 
