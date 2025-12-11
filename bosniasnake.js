@@ -1,5 +1,3 @@
---- START OF FILE bosniasnake.js ---
-
 import React, { useEffect, useRef, useState } from "react";
 import Peer from "peerjs";
 
@@ -255,7 +253,6 @@ export default function BosniaSnakeFixedRuntime() {
   const mouse = useRef({ x: 0, y: 0 });
   const keys = useRef({});
 
-  // Use a ref to store current render/update functions to avoid stale closures during development hot-reloads
   const gameLogicRef = useRef({});
 
   const gameState = useRef({
@@ -666,8 +663,6 @@ export default function BosniaSnakeFixedRuntime() {
   });
 
   // --- REFRESH LOGIC REF ---
-  // This hook ensures that every render, the ref points to the LATEST version of the functions.
-  // This solves the problem where the loop keeps running old code after you save the file.
   useEffect(() => {
     gameLogicRef.current = {
       updateSinglePlayer,
@@ -715,7 +710,6 @@ export default function BosniaSnakeFixedRuntime() {
           ctx.stroke();
         }
       } else {
-        // --- RETRIEVE FRESH LOGIC FROM REF ---
         const logic = gameLogicRef.current;
         const state = gameState.current;
 
@@ -732,7 +726,7 @@ export default function BosniaSnakeFixedRuntime() {
         }
 
         if (isHost && logic.updateSinglePlayer) {
-          logic.updateSinglePlayer(); // Call the latest version
+          logic.updateSinglePlayer();
           if (timestamp - lastSentTime.current > BROADCAST_RATE) {
             const payload = { type: "STATE", state: compressState(state) };
             connections.current.forEach((c) => {
@@ -749,7 +743,7 @@ export default function BosniaSnakeFixedRuntime() {
           renderIndex = 0;
         }
         if (logic.renderGame) {
-          logic.renderGame(ctx, canvas, renderIndex); // Call the latest version
+          logic.renderGame(ctx, canvas, renderIndex);
         }
       }
       animationId = requestAnimationFrame(loop);
@@ -918,6 +912,7 @@ export default function BosniaSnakeFixedRuntime() {
     });
   };
 
+  // --- UPDATED RESET WORLD WITH SPAWN PROTECTION ---
   const resetWorld = (spawnBots) => {
     const state = gameState.current;
     state.food = [];
@@ -945,11 +940,13 @@ export default function BosniaSnakeFixedRuntime() {
     state.players.forEach((p) => {
       p.x = randPosCell();
       p.y = randPosCell();
-      p.body = [];
+      // FIX: Initialize body immediately to prevent glitching
+      p.body = [{ x: p.x, y: p.y }];
       p.length = 140;
       p.scale = 18;
       p.dead = false;
-      p.frozenUntil = 0;
+      // FIX: 2 Seconds of Invincibility (Spawn Protection)
+      p.frozenUntil = Date.now() + 2000;
       p.abilityActive = false;
       p.lastAbilityTime = 0;
       p.maplePhase = null;
@@ -1078,8 +1075,11 @@ export default function BosniaSnakeFixedRuntime() {
     });
   }
 
+  // --- UPDATED PHYSICS TO ALLOW MOVEMENT WHILE SPAWN PROTECTED ---
   function handlePhysics(p, inp) {
-    if (p.frozenUntil > Date.now()) return;
+    // FIX: Removed the logic that froze the player in place.
+    // Now you can move even if frozenUntil is active.
+
     const now = Date.now();
 
     if (p.country === "soviet") {
@@ -1395,8 +1395,22 @@ export default function BosniaSnakeFixedRuntime() {
 
       state.players.forEach((p) => {
         if (!p.dead && p.active) {
-          if (coll(p, enemy, p.scale + enemy.width)) killPlayer(p, null);
-          if (checkBodyCollision(p, enemy)) killPlayer(p, null);
+          // FIX: INVINCIBILITY CHECK (If frozen, don't kill)
+          const isInvincible = p.frozenUntil && now < p.frozenUntil;
+
+          if (
+            !isInvincible &&
+            coll(p, enemy, p.scale + enemy.width)
+          ) {
+            killPlayer(p, null);
+          }
+          if (
+             !isInvincible &&
+             checkBodyCollision(p, enemy)
+          ) {
+             killPlayer(p, null);
+          }
+          // Players can still kill enemies while invincible
           for (let j = 0; j < p.body.length; j += 2)
             if (coll(enemy, p.body[j], enemy.width + p.scale))
               killEnemy(enemy, p);
@@ -1462,7 +1476,9 @@ export default function BosniaSnakeFixedRuntime() {
         if (now - m.lastTick > m.timer * 1000) {
           createExplosion(m.x, m.y);
           active.forEach((p) => {
-            if (!p.dead && dist(p, m) < 300) killPlayer(p, null);
+            // FIX: Mines should not kill you if you are invincible
+            const isInvincible = p.frozenUntil && now < p.frozenUntil;
+            if (!p.dead && !isInvincible && dist(p, m) < 300) killPlayer(p, null);
           });
           s.mines.splice(i, 1);
         }
