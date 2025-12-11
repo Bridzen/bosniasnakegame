@@ -46,7 +46,7 @@
             top: 20px;
             left: 20px;
             width: 240px;
-            height: 80px; /* Taller for mine counter */
+            height: 85px;
             background: rgba(0, 15, 60, 0.7);
             border: 2px solid #0055A4;
             border-radius: 10px;
@@ -74,8 +74,9 @@
         
         #hud-mines {
             font-size: 12px;
-            color: #aaa;
+            color: #ccc;
             margin-top: 4px;
+            font-weight: bold;
         }
 
         /* --- ABILITY INDICATOR (For Special Skins) --- */
@@ -1052,7 +1053,7 @@
                 p.barrageStartTime = 0;
                 p.nextExplosionTime = 0;
                 p.sovietBoost = false;
-                // Bosnia Kingdom Reset
+                // Bosnia Kingdom Reset (RESET MINES TRIGGERED ON DEATH/RESTART)
                 p.minesTriggered = 0; 
             });
 
@@ -1515,6 +1516,10 @@
                     let triggerer = null;
 
                     activeEntities.forEach((p) => { 
+                        // FEATURE: You can't activate your own converted mines (Bosnian Kingdom immunity to triggering)
+                        // If I am Bosnian Kingdom, and this is a Bosnian Mine (converted by me), I don't trigger it.
+                        if (m.isBosnian && p.country === "bosnian_kingdom") return;
+
                         if (!p.dead && dist(p, m) < 200) { 
                             triggered = true; 
                             triggerer = p;
@@ -1551,7 +1556,7 @@
                         createExplosion(m.x, m.y);
                         activeEntities.forEach((p) => { 
                             if (!p.dead && dist(p, m) < 300) {
-                                // IMMUNITY: Bosnian Kingdom player is immune to Bosnian Mines
+                                // IMMUNITY: Bosnian Kingdom player is immune to Bosnian Mines DAMAGE as well
                                 if (m.isBosnian && p.country === "bosnian_kingdom") return;
 
                                 if(p.id !== undefined) killPlayer(p, null); // Player
