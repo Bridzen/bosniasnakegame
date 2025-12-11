@@ -1216,27 +1216,50 @@
             // 3. BOSNIAN KINGDOM (New Ability)
             else if (p.country === "bosnian_kingdom") {
                 const cooldown = 30000;
-                // Trigger
+                
+                // Trigger Logic
                 if (inp.triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > cooldown)) {
                     p.lastAbilityTime = now;
                     p.abilityActive = true; // For visual flash
-                    p.abilityEndTime = now + 1000;
-                    
-                    let minesConverted = 0;
-                    gameData.mines.forEach(m => {
-                        // Transform nearby mines (radius 2 tiles = 300)
-                        if (dist(p, m) < 2 * CELL) {
-                            m.isBosnian = true;
-                            // Reset trigger to instant if already nearby, or prepare them
-                            if (m.state === 'triggered') m.timer = 0; 
-                            minesConverted++;
-                        }
-                    });
-                    
-                    if (minesConverted > 0) playSound("bosnian_boom"); // Can reuse explosion sound or new one
+                    p.abilityEndTime = now + 1500; // DURATION NOW 1.5 SECONDS
+                    playSound("bosnian_boom");
                 }
                 
-                if (now > p.abilityEndTime) p.abilityActive = false;
+                // Continuous Active Logic (Move with it)
+                if (p.abilityActive) {
+                    if (now > p.abilityEndTime) {
+                        p.abilityActive = false;
+                    } else {
+                        const range = 2 * CELL; 
+                        
+                        // A. Convert existing Mines continuously
+                        gameData.mines.forEach(m => {
+                            if (dist(p, m) < range && !m.isBosnian) {
+                                m.isBosnian = true;
+                                if (m.state === 'triggered') m.timer = 0; // Instant trigger if already angry
+                            }
+                        });
+
+                        // B. Convert FOOD continuously
+                        // Loop backwards because we are removing items
+                        for (let i = gameData.food.length - 1; i >= 0; i--) {
+                            const f = gameData.food[i];
+                            if (dist(p, f) < range) {
+                                // Create a new Bosnian mine at food location
+                                gameData.mines.push({
+                                    x: f.x,
+                                    y: f.y,
+                                    state: "idle",
+                                    timer: 3.0,
+                                    lastTick: now,
+                                    isBosnian: true // Your mine now
+                                });
+                                // Remove the food
+                                gameData.food.splice(i, 1);
+                            }
+                        }
+                    }
+                }
             }
 
             // MOVEMENT
