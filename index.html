@@ -627,7 +627,10 @@
         const BASE_SPEED = 4.2;
         const TURN_SPEED = 0.09;
         const MAX_ENEMIES = 8; // Number of AI
-        const SIZE_GAIN_PER_LEVEL = 0.25;
+        
+        // NERF: SIZE GAIN REDUCED
+        const SIZE_GAIN_PER_LEVEL = 0.15; // Was 0.25
+        
         const FOOD_RADIUS_BASE = 6;
         const LENGTH_GAIN = 8;
         const BROADCAST_RATE = 50; // ms
@@ -644,7 +647,7 @@
             bosnia: "#002F6C", russia: "#FFFFFF", germany: "#000000", france: "#0055A4", 
             canada: "#FF0000", ukraine: "#0057B8", ireland: "#169B62", soviet: "#CC0000", 
             golden_maple: "#DAA520", usa: "#3C3B6E", uk: "#012169", italy: "#008C45", 
-            poland: "#DC143C", sweden: "#006AA7", denmark: "#C60C30"
+            poland: "#DC143C", sweden: "#006AA7", denmark: "#C60C30", serbia: "#C6363C"
         };
 
         const UNLOCK_CRITERIA = {
@@ -1043,9 +1046,9 @@
         }
 
         function spawnOneEnemy() {
-            // INCREASED SPAWN SIZE FOR AI
-            const startLen = 250 + Math.random() * 400; 
-            const startWidth = 18;
+            // NERFED SPAWN LENGTH
+            const startLen = 180 + Math.random() * 150; 
+            const startWidth = 14;
 
             gameData.enemies.push({
                 x: randPosCell(),
@@ -1059,7 +1062,9 @@
                 boostSpeed: 7.5 * 1.1,
                 turnSpeed: 0.08,
                 alive: true,
-                color: ["#8A2BE2", "#DC143C", "#228B22", "#FF4500", "#1E90FF"][Math.floor(Math.random() * 5)],
+                // ALL AI ARE SERBIA
+                color: "#C6363C", 
+                country: "serbia",
                 frozenUntil: 0,
                 inZoneSince: null,
                 outZoneSince: null,
@@ -1109,7 +1114,7 @@
 
             // Logic
             if (p) handlePhysics(p, inp);
-            updateAI(); // The complex React AI logic
+            updateAI(); 
             if (p) updateEnvironment([p]);
         }
 
@@ -1215,24 +1220,22 @@
             while (p.body.length > p.length) p.body.pop();
         }
 
-        // --- ADVANCED AI (Buffed) ---
+        // --- ADVANCED AI (Updated: Survival Focus) ---
         function updateAI() {
             const state = gameData;
             const viewDist = 500;
             const now = Date.now();
-            const TRIGGER_DIST = 5 * CELL;
-            const RESET_DIST = 8 * CELL;
-            const TRIGGER_TIME = 3000;
-            const RESET_TIME = 2000;
+            
+            // New Evasion Parameters
+            const DETECTION_RADIUS = 300; 
 
             state.enemies.forEach((enemy) => {
                 if (!enemy.alive) return;
                 if (enemy.frozenUntil && now < enemy.frozenUntil) return;
 
-                // SCALING LOGIC BUFFED: Grow width much faster based on length
+                // Scale Logic (Normal scale growth now)
                 if (!enemy.baseScale) enemy.baseScale = 12;
-                // Changed divisor from 10 to 6 for faster width growth
-                const currentCalculatedWidth = 15 + Math.min(45, (enemy.length - 140) / 6); 
+                const currentCalculatedWidth = 12 + Math.min(30, (enemy.length - 140) / 10); 
                 if (currentCalculatedWidth > enemy.baseScale) enemy.baseScale = currentCalculatedWidth;
                 enemy.width = enemy.baseScale;
 
@@ -1243,120 +1246,51 @@
                     if (dist(enemy, zone) < zone.radius) { aiSpeedMult = 0.4; aiTurnMult = 0.33; }
                 });
 
-                // Target Selection
-                let target = null;
-                let minDist = Infinity;
-                state.players.forEach((p) => {
-                    if (!p.dead && p.active) {
-                        const d = dist(enemy, p);
-                        if (d < minDist) { minDist = d; target = p; }
-                    }
-                });
-
-                // Enrage Logic
-                if (target) {
-                    if (minDist < TRIGGER_DIST) {
-                        if (!enemy.inZoneSince) enemy.inZoneSince = now;
-                        enemy.outZoneSince = null;
-                        if (now - enemy.inZoneSince > TRIGGER_TIME) enemy.isEnraged = true;
-                    } else if (minDist > RESET_DIST) {
-                        if (!enemy.outZoneSince) enemy.outZoneSince = now;
-                        enemy.inZoneSince = null;
-                        if (now - enemy.outZoneSince > RESET_TIME) enemy.isEnraged = false;
-                    }
-                } else {
-                    enemy.isEnraged = false; enemy.inZoneSince = null;
-                }
-
                 let forceSprint = false;
                 let targetAngle = enemy.angle;
-                let criticalThreat = null;
-                let minCritDist = 160;
+                
+                // SURVIVAL CHECK (PRIORITY 1)
+                // Check distance to player head AND body
+                let dangerSource = null;
+                let minDangerDist = Infinity;
 
-                // Body Collision Avoidance (Player)
                 state.players.forEach((p) => {
                     if (!p.dead && p.active) {
-                        for (let i = 0; i < p.body.length; i += 2) {
-                            const d = dist(enemy, p.body[i]);
-                            if (d < minCritDist && d < enemy.width + p.scale + 40) { 
-                                criticalThreat = p.body[i]; minCritDist = d; 
-                            }
+                        // Check head
+                        let d = dist(enemy, p);
+                        if(d < DETECTION_RADIUS + p.scale) {
+                             if(d < minDangerDist) { minDangerDist = d; dangerSource = p; }
+                        }
+                        // Check body segments
+                        for(let i=0; i<p.body.length; i+=3) {
+                             d = dist(enemy, p.body[i]);
+                             if(d < DETECTION_RADIUS + p.scale) {
+                                 if(d < minDangerDist) { minDangerDist = d; dangerSource = p.body[i]; }
+                             }
                         }
                     }
                 });
 
-                // Emergency Turn
-                if (criticalThreat) {
-                    targetAngle = Math.atan2(enemy.y - criticalThreat.y, enemy.x - criticalThreat.x);
+                if (dangerSource) {
+                    // EVADE MODE: Run directly away from threat
+                    targetAngle = Math.atan2(enemy.y - dangerSource.y, enemy.x - dangerSource.x);
                     forceSprint = true;
                 } else {
-                    // "Feelers" Raycasting for Mines/Walls
-                    let panicMine = null;
-                    let minMineDist = Infinity;
-                    for (let m of state.mines) {
-                        const d = dist(enemy, m);
-                        const safeZone = m.state === "triggered" ? 500 : 350;
-                        if (d < safeZone && d < minMineDist) { minMineDist = d; panicMine = m; }
-                    }
-
-                    const feelers = [
-                        { angle: enemy.angle - 0.7, dist: viewDist, type: "left" },
-                        { angle: enemy.angle - 0.35, dist: viewDist + 100, type: "midLeft" },
-                        { angle: enemy.angle, dist: viewDist + 150, type: "center" },
-                        { angle: enemy.angle + 0.35, dist: viewDist + 100, type: "midRight" },
-                        { angle: enemy.angle + 0.7, dist: viewDist, type: "right" },
-                    ];
-
-                    let dangerLeft = 0, dangerRight = 0, blockedCenter = false;
-                    
-                    const checkPointDanger = (px, py) => {
-                        const limit = WORLD_SIZE / 2 - 100;
-                        if (px < -limit || px > limit || py < -limit || py > limit) return 300;
-                        for (let m of state.mines) if (dist({ x: px, y: py }, m) < 220) return 2000;
-                        return 0;
-                    };
-
-                    feelers.forEach((f) => {
-                        const steps = 5;
-                        for (let s = 1; s <= steps; s++) {
-                            const danger = checkPointDanger(
-                                enemy.x + Math.cos(f.angle) * (f.dist / steps) * s,
-                                enemy.y + Math.sin(f.angle) * (f.dist / steps) * s
-                            );
-                            if (danger > 0) {
-                                if (f.type.includes("left")) dangerLeft += danger / s;
-                                if (f.type.includes("right")) dangerRight += danger / s;
-                                if (f.type === "center") blockedCenter = true;
-                            }
-                        }
+                    // Normal Behavior: Hunt Food
+                    let closestFood = null;
+                    let minFoodDist = Infinity;
+                    state.food.forEach((f) => {
+                        const d = dist(enemy, f);
+                        if (d < minFoodDist && d < 600) { minFoodDist = d; closestFood = f; }
                     });
-
-                    // React to Feelers
-                    if (dangerLeft > 0 || dangerRight > 0 || blockedCenter) {
-                        if (dangerLeft > dangerRight) targetAngle += 2.5;
-                        else if (dangerRight > dangerLeft) targetAngle -= 2.5;
-                        else targetAngle += 3.0;
-                    } else if (panicMine) {
-                        targetAngle = Math.atan2(enemy.y - panicMine.y, enemy.x - panicMine.x);
-                        forceSprint = true;
-                    } else if (enemy.isEnraged && target) {
-                        // Chase Player
-                        const playerSpeed = target.length < target.length - 1 ? BASE_SPEED * 1.8 : BASE_SPEED;
-                        const lookAhead = Math.min(60, minDist / 5);
-                        const predX = target.x + Math.cos(target.angle) * playerSpeed * lookAhead;
-                        const predY = target.y + Math.sin(target.angle) * playerSpeed * lookAhead;
-                        targetAngle = Math.atan2(predY - enemy.y, predX - enemy.x);
-                        if (Math.abs(normalizeAngle(targetAngle - enemy.angle)) < 0.3 && minDist > 150) forceSprint = true;
-                    } else {
-                        // Find Food
-                        let closestFood = null;
-                        let minFoodDist = Infinity;
-                        state.food.forEach((f) => {
-                            const d = dist(enemy, f);
-                            if (d < minFoodDist && d < 600) { minFoodDist = d; closestFood = f; }
-                        });
-                        if (closestFood) targetAngle = Math.atan2(closestFood.y - enemy.y, closestFood.x - enemy.x);
-                    }
+                    if (closestFood) targetAngle = Math.atan2(closestFood.y - enemy.y, closestFood.x - enemy.x);
+                    
+                    // Simple Wall Avoidance
+                    const lim = WORLD_SIZE/2 - 100;
+                    if(enemy.x < -lim) targetAngle = 0;
+                    else if(enemy.x > lim) targetAngle = Math.PI;
+                    else if(enemy.y < -lim) targetAngle = Math.PI/2;
+                    else if(enemy.y > lim) targetAngle = -Math.PI/2;
                 }
 
                 // Apply AI Movement
@@ -1376,11 +1310,11 @@
                 enemy.body.unshift({ x: enemy.x, y: enemy.y });
                 while (enemy.body.length > enemy.length) enemy.body.pop();
 
-                // AI EATING BUFF
+                // Eat
                 for (let i = state.food.length - 1; i >= 0; i--) {
                     if (coll(enemy, state.food[i], enemy.width + 10)) {
                         state.food.splice(i, 1);
-                        enemy.length += 30; // HUGE GROWTH BUFF (Was 12)
+                        enemy.length += 12; // Normal growth
                     }
                 }
 
@@ -1434,7 +1368,8 @@
                         s.food.splice(i, 1);
                         const multiplier = f.isGolden ? 3 : 1;
                         p.length += LENGTH_GAIN * multiplier;
-                        p.scale = Math.min(600, p.scale + foodLevel * SIZE_GAIN_PER_LEVEL * multiplier);
+                        // NERFED SIZE GAIN, CAP 2000
+                        p.scale = Math.min(2000, p.scale + foodLevel * SIZE_GAIN_PER_LEVEL * multiplier);
                     }
                 });
             });
@@ -1672,6 +1607,23 @@
             ctx.lineWidth = 12; ctx.strokeStyle = "rgba(255,0,0,0.9)";
             ctx.strokeRect(-WORLD_SIZE / 2, -WORLD_SIZE / 2, WORLD_SIZE, WORLD_SIZE);
 
+            // IRELAND ESP (Restored)
+            if (me.country === "ireland" && !me.dead) {
+                 ctx.save();
+                 ctx.strokeStyle = "rgba(0, 255, 0, 0.5)";
+                 ctx.lineWidth = 2;
+                 ctx.setLineDash([10, 10]);
+                 gameData.enemies.forEach(e => {
+                     if (e.alive) {
+                         ctx.beginPath();
+                         ctx.moveTo(me.x, me.y);
+                         ctx.lineTo(e.x, e.y);
+                         ctx.stroke();
+                     }
+                 });
+                 ctx.restore();
+            }
+
             // Syrup Zones
             gameData.syrupZones.forEach((z) => {
                 ctx.fillStyle = "rgba(184, 134, 11, 0.5)"; ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2); ctx.fill();
@@ -1766,7 +1718,7 @@
         }
 
         // -------------------------------------------------------------------------
-        // FLAG DRAWING RENDERER (Updated Ireland)
+        // FLAG DRAWING RENDERER (Updated Ireland + Golden Maple)
         // -------------------------------------------------------------------------
         function drawFlag(ctx, country, r, fallbackColor) {
             const rect = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
@@ -1783,6 +1735,12 @@
                 rect(-r, -r, r * 2, (r * 2) / 3, "white");
                 rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0039A6");
                 rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "#D52B1E");
+            }
+            // SERBIA (AI SKIN)
+            else if (country === 'serbia') {
+                rect(-r, -r, r * 2, (r * 2) / 3, "#C6363C"); // Red top
+                rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0C4076"); // Blue middle
+                rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "white"); // White bottom
             }
             else if (country === 'germany') {
                 rect(-r, -r, r * 2, (r * 2) / 3, "black");
@@ -1834,8 +1792,13 @@
                 ctx.strokeStyle = "#FFD700"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(-r * 0.4, -r * 0.2, r * 0.2, 0, Math.PI); ctx.stroke();
             }
             else if (country === 'golden_maple') {
-                rect(-r, -r, r * 2, r * 2, "#DAA520");
-                ctx.fillStyle = "#B22222"; ctx.beginPath(); ctx.moveTo(0, -r * 0.5); ctx.lineTo(r * 0.3, 0); ctx.lineTo(0, r * 0.5); ctx.lineTo(-r * 0.3, 0); ctx.fill();
+                // FIXED GOLDEN MAPLE SKIN (Based on image)
+                rect(-r, -r, r*2, r*2, "white"); // White Background
+                rect(-r, -r, (r*2)/4, r*2, "#FFFF00"); // Yellow Left Band (approx 1/4)
+                rect(r/2, -r, (r*2)/4, r*2, "#FFFF00"); // Yellow Right Band
+                // Yellow Leaf
+                ctx.fillStyle = "#FFFF00"; 
+                ctx.beginPath(); ctx.moveTo(0, -r * 0.4); ctx.lineTo(r * 0.3, 0); ctx.lineTo(0, r * 0.4); ctx.lineTo(-r * 0.3, 0); ctx.fill();
             }
             else if (country === 'sweden') {
                 rect(-r, -r, r * 2, r * 2, "#006AA7");
