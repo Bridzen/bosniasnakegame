@@ -1046,8 +1046,8 @@
         }
 
         function spawnOneEnemy() {
-            // NERFED SPAWN LENGTH
-            const startLen = 180 + Math.random() * 150; 
+            // NERFED SPAWN LENGTH (Shorter)
+            const startLen = 140 + Math.random() * 100; 
             const startWidth = 14;
 
             gameData.enemies.push({
@@ -1062,13 +1062,11 @@
                 boostSpeed: 7.5 * 1.1,
                 turnSpeed: 0.08,
                 alive: true,
-                // ALL AI ARE SERBIA
                 color: "#C6363C", 
-                country: "serbia",
+                country: "serbia", // ALL AI ARE SERBIA
                 frozenUntil: 0,
-                inZoneSince: null,
-                outZoneSince: null,
-                isEnraged: false
+                // Personality: Aggressive (Divebomb) vs Cautious
+                personality: Math.random() < 0.5 ? 'aggressive' : 'cautious' 
             });
         }
 
@@ -1122,6 +1120,23 @@
         function handlePhysics(p, inp) {
             const now = Date.now();
             if (p.frozenUntil > now) return;
+
+            // CHECK COLLISIONS (Player Hitting AI)
+            gameData.enemies.forEach(e => {
+                if(e.alive) {
+                    // Head to Head
+                    if (dist(p, e) < p.scale + e.width) {
+                        killPlayer(p, null);
+                    }
+                    // Head to Body
+                    for(let i=0; i<e.body.length; i+=3) {
+                        if(dist(p, e.body[i]) < p.scale + e.width - 5) {
+                            killPlayer(p, null);
+                            return; // Die once
+                        }
+                    }
+                }
+            });
 
             // ABILITIES
             // 1. SOVIET
@@ -1220,14 +1235,14 @@
             while (p.body.length > p.length) p.body.pop();
         }
 
-        // --- ADVANCED AI (Updated: Survival Focus) ---
+        // --- ADVANCED AI (Aggressive vs Cautious) ---
         function updateAI() {
             const state = gameData;
             const viewDist = 500;
             const now = Date.now();
             
-            // New Evasion Parameters
-            const DETECTION_RADIUS = 300; 
+            // Detection Radius
+            const AGGRO_RADIUS = 500; 
 
             state.enemies.forEach((enemy) => {
                 if (!enemy.alive) return;
@@ -1248,35 +1263,33 @@
 
                 let forceSprint = false;
                 let targetAngle = enemy.angle;
-                
-                // SURVIVAL CHECK (PRIORITY 1)
-                // Check distance to player head AND body
-                let dangerSource = null;
-                let minDangerDist = Infinity;
+                let targetPlayer = null;
+                let distToPlayer = Infinity;
 
+                // Find closest player
                 state.players.forEach((p) => {
                     if (!p.dead && p.active) {
-                        // Check head
-                        let d = dist(enemy, p);
-                        if(d < DETECTION_RADIUS + p.scale) {
-                             if(d < minDangerDist) { minDangerDist = d; dangerSource = p; }
-                        }
-                        // Check body segments
-                        for(let i=0; i<p.body.length; i+=3) {
-                             d = dist(enemy, p.body[i]);
-                             if(d < DETECTION_RADIUS + p.scale) {
-                                 if(d < minDangerDist) { minDangerDist = d; dangerSource = p.body[i]; }
-                             }
-                        }
+                        const d = dist(enemy, p);
+                        if(d < distToPlayer) { distToPlayer = d; targetPlayer = p; }
                     }
                 });
 
-                if (dangerSource) {
-                    // EVADE MODE: Run directly away from threat
-                    targetAngle = Math.atan2(enemy.y - dangerSource.y, enemy.x - dangerSource.x);
-                    forceSprint = true;
+                // BEHAVIOR LOGIC
+                if (targetPlayer && distToPlayer < AGGRO_RADIUS) {
+                    if(enemy.personality === 'aggressive') {
+                        // DIVEBOMB: Aim for head + intercept
+                        const lead = 30; // predict movement
+                        const tx = targetPlayer.x + Math.cos(targetPlayer.angle) * lead;
+                        const ty = targetPlayer.y + Math.sin(targetPlayer.angle) * lead;
+                        targetAngle = Math.atan2(ty - enemy.y, tx - enemy.x);
+                        forceSprint = true; // Always sprint when attacking
+                    } else {
+                        // CAUTIOUS: Evade
+                        targetAngle = Math.atan2(enemy.y - targetPlayer.y, enemy.x - targetPlayer.x);
+                        forceSprint = true; 
+                    }
                 } else {
-                    // Normal Behavior: Hunt Food
+                    // Default: Hunt Food
                     let closestFood = null;
                     let minFoodDist = Infinity;
                     state.food.forEach((f) => {
@@ -1307,6 +1320,13 @@
 
                 enemy.x += Math.cos(enemy.angle) * spd;
                 enemy.y += Math.sin(enemy.angle) * spd;
+                
+                // --- HARD BORDER DEATH FOR AI ---
+                if(Math.abs(enemy.x) > WORLD_SIZE/2 || Math.abs(enemy.y) > WORLD_SIZE/2) {
+                    killEnemy(enemy, null);
+                    return;
+                }
+
                 enemy.body.unshift({ x: enemy.x, y: enemy.y });
                 while (enemy.body.length > enemy.length) enemy.body.pop();
 
@@ -2002,14 +2022,7 @@
 
         document.getElementById('btn-redeem').onclick = () => {
             const code = document.getElementById('redeem-input').value;
-            
-            // --- SECRET CODES ---
-            if (code === "Roblox13_isme") {
-                updateStats({ unlockSecret: "MASTER_UNLOCK" });
-                alert("GOD MODE: All Skins Unlocked!");
-                renderSkinGrid();
-            }
-            else if (code === "Ireland_isgreat") {
+            if (code === "Ireland_isgreat") {
                 if(!isSkinUnlocked('ireland')) {
                     updateStats({ unlockSecret: "ireland" });
                     alert("SUCCESS: Ireland Skin Unlocked!");
