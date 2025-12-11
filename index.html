@@ -647,7 +647,8 @@
             bosnia: "#002F6C", russia: "#FFFFFF", germany: "#000000", france: "#0055A4", 
             canada: "#FF0000", ukraine: "#0057B8", ireland: "#169B62", soviet: "#CC0000", 
             golden_maple: "#DAA520", usa: "#3C3B6E", uk: "#012169", italy: "#008C45", 
-            poland: "#DC143C", sweden: "#006AA7", denmark: "#C60C30", serbia: "#C6363C"
+            poland: "#DC143C", sweden: "#006AA7", denmark: "#C60C30", serbia: "#C6363C",
+            croatia: "#CC0000"
         };
 
         const UNLOCK_CRITERIA = {
@@ -1046,9 +1047,15 @@
         }
 
         function spawnOneEnemy() {
-            // NERFED SPAWN LENGTH (Shorter)
             const startLen = 140 + Math.random() * 100; 
             const startWidth = 14;
+            
+            // CROATIA SPAWN LOGIC: 5% chance if player is > 100 size
+            const player = gameData.players[0];
+            let isCroatia = false;
+            if (player && player.scale > 100 && Math.random() < 0.05) {
+                isCroatia = true;
+            }
 
             gameData.enemies.push({
                 x: randPosCell(),
@@ -1062,11 +1069,11 @@
                 boostSpeed: 7.5 * 1.1,
                 turnSpeed: 0.08,
                 alive: true,
-                color: "#C6363C", 
-                country: "serbia", // ALL AI ARE SERBIA
+                color: isCroatia ? "#CC0000" : "#C6363C", 
+                country: isCroatia ? "croatia" : "serbia", // Default Serbia
                 frozenUntil: 0,
-                // Personality: Aggressive (Divebomb) vs Cautious
-                personality: Math.random() < 0.5 ? 'aggressive' : 'cautious' 
+                // Personality: Aggressive (Divebomb) vs Balanced
+                personality: isCroatia ? 'pure_aggro' : 'balanced' 
             });
         }
 
@@ -1235,14 +1242,11 @@
             while (p.body.length > p.length) p.body.pop();
         }
 
-        // --- ADVANCED AI (Aggressive vs Cautious) ---
+        // --- ADVANCED AI (Updated Logic) ---
         function updateAI() {
             const state = gameData;
-            const viewDist = 500;
             const now = Date.now();
-            
-            // Detection Radius
-            const AGGRO_RADIUS = 500; 
+            const AGGRO_RADIUS = 600; 
 
             state.enemies.forEach((enemy) => {
                 if (!enemy.alive) return;
@@ -1274,37 +1278,66 @@
                     }
                 });
 
-                // BEHAVIOR LOGIC
-                if (targetPlayer && distToPlayer < AGGRO_RADIUS) {
-                    if(enemy.personality === 'aggressive') {
-                        // DIVEBOMB: Aim for head + intercept
-                        const lead = 30; // predict movement
+                // --- CROATIA (Pure Aggro) ---
+                if (enemy.country === 'croatia') {
+                    if (targetPlayer) {
+                        const lead = 40; 
                         const tx = targetPlayer.x + Math.cos(targetPlayer.angle) * lead;
                         const ty = targetPlayer.y + Math.sin(targetPlayer.angle) * lead;
                         targetAngle = Math.atan2(ty - enemy.y, tx - enemy.x);
-                        forceSprint = true; // Always sprint when attacking
-                    } else {
-                        // CAUTIOUS: Evade
-                        targetAngle = Math.atan2(enemy.y - targetPlayer.y, enemy.x - targetPlayer.x);
-                        forceSprint = true; 
+                        forceSprint = true;
                     }
-                } else {
-                    // Default: Hunt Food
-                    let closestFood = null;
-                    let minFoodDist = Infinity;
-                    state.food.forEach((f) => {
-                        const d = dist(enemy, f);
-                        if (d < minFoodDist && d < 600) { minFoodDist = d; closestFood = f; }
-                    });
-                    if (closestFood) targetAngle = Math.atan2(closestFood.y - enemy.y, closestFood.x - enemy.x);
+                } 
+                // --- SERBIA (Balanced: 33% Aggro, 33% Survive, 33% Passive) ---
+                else {
+                    // Random logic roll on every frame makes them twitchy, use weights instead
+                    const rand = Math.random();
                     
-                    // Simple Wall Avoidance
-                    const lim = WORLD_SIZE/2 - 100;
-                    if(enemy.x < -lim) targetAngle = 0;
-                    else if(enemy.x > lim) targetAngle = Math.PI;
-                    else if(enemy.y < -lim) targetAngle = Math.PI/2;
-                    else if(enemy.y > lim) targetAngle = -Math.PI/2;
+                    // 1. SURVIVAL CHECK (Always active if too close)
+                    if (distToPlayer < 250) {
+                        // Too close! Run away! (Survival Mode)
+                        targetAngle = Math.atan2(enemy.y - targetPlayer.y, enemy.x - targetPlayer.x);
+                        forceSprint = true;
+                    } 
+                    // 2. MIXED BEHAVIOR
+                    else if (distToPlayer < AGGRO_RADIUS) {
+                        if (rand < 0.33) {
+                            // AGGRESSIVE: Attack head
+                            const tx = targetPlayer.x + Math.cos(targetPlayer.angle) * 30;
+                            const ty = targetPlayer.y + Math.sin(targetPlayer.angle) * 30;
+                            targetAngle = Math.atan2(ty - enemy.y, tx - enemy.x);
+                            forceSprint = true;
+                        } else if (rand < 0.66) {
+                            // SURVIVAL: Back off / Flank
+                            targetAngle = Math.atan2(enemy.y - targetPlayer.y, enemy.x - targetPlayer.x);
+                        } else {
+                            // PASSIVE: Seek food normally
+                            let closestFood = null;
+                            let minFoodDist = Infinity;
+                            state.food.forEach((f) => {
+                                const d = dist(enemy, f);
+                                if (d < minFoodDist && d < 600) { minFoodDist = d; closestFood = f; }
+                            });
+                            if (closestFood) targetAngle = Math.atan2(closestFood.y - enemy.y, closestFood.x - enemy.x);
+                        }
+                    } else {
+                        // Far away -> Passive Food Seek
+                        let closestFood = null;
+                        let minFoodDist = Infinity;
+                        state.food.forEach((f) => {
+                            const d = dist(enemy, f);
+                            if (d < minFoodDist && d < 600) { minFoodDist = d; closestFood = f; }
+                        });
+                        if (closestFood) targetAngle = Math.atan2(closestFood.y - enemy.y, closestFood.x - enemy.x);
+                    }
                 }
+                
+                // Wall Avoidance (Hard limit)
+                const lim = WORLD_SIZE/2 - 100;
+                if(enemy.x < -lim) targetAngle = 0;
+                else if(enemy.x > lim) targetAngle = Math.PI;
+                else if(enemy.y < -lim) targetAngle = Math.PI/2;
+                else if(enemy.y > lim) targetAngle = -Math.PI/2;
 
                 // Apply AI Movement
                 let diff = normalizeAngle(targetAngle - enemy.angle);
@@ -1738,7 +1771,7 @@
         }
 
         // -------------------------------------------------------------------------
-        // FLAG DRAWING RENDERER (Updated Ireland + Golden Maple)
+        // FLAG DRAWING RENDERER (Updated Ireland + Golden Maple + Croatia)
         // -------------------------------------------------------------------------
         function drawFlag(ctx, country, r, fallbackColor) {
             const rect = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
@@ -1755,6 +1788,20 @@
                 rect(-r, -r, r * 2, (r * 2) / 3, "white");
                 rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0039A6");
                 rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "#D52B1E");
+            }
+            // CROATIA
+            else if (country === 'croatia') {
+                // R-W-B Stripes
+                rect(-r, -r, r*2, (r*2)/3, "red");
+                rect(-r, -r+(r*2)/3, r*2, (r*2)/3, "white");
+                rect(-r, -r+4*r/3, r*2, (r*2)/3, "blue");
+                // Simplified Checkerboard Shield
+                ctx.fillStyle = "red";
+                ctx.fillRect(-r/2, -r/2, r, r);
+                ctx.fillStyle = "white";
+                for(let y=0; y<2; y++) for(let x=0; x<2; x++) {
+                   if((x+y)%2===0) ctx.fillRect(-r/2 + x*(r/2), -r/2 + y*(r/2), r/2, r/2);
+                }
             }
             // SERBIA (AI SKIN)
             else if (country === 'serbia') {
@@ -2022,6 +2069,8 @@
 
         document.getElementById('btn-redeem').onclick = () => {
             const code = document.getElementById('redeem-input').value;
+            
+            // --- SECRET CODES ---
             if (code === "Ireland_isgreat") {
                 if(!isSkinUnlocked('ireland')) {
                     updateStats({ unlockSecret: "ireland" });
