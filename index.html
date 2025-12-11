@@ -821,6 +821,9 @@
         }
 
         function isSkinUnlocked(skin) {
+            // Master Unlock Check
+            if (userStats.unlockedSecrets.includes("MASTER_UNLOCK")) return true;
+
             const req = UNLOCK_CRITERIA[skin];
             if (!req) return true;
             if (skin === "soviet") {
@@ -1040,14 +1043,18 @@
         }
 
         function spawnOneEnemy() {
+            // INCREASED SPAWN SIZE FOR AI
+            const startLen = 250 + Math.random() * 400; 
+            const startWidth = 18;
+
             gameData.enemies.push({
                 x: randPosCell(),
                 y: randPosCell(),
                 angle: Math.random() * Math.PI * 2,
                 body: [],
-                length: 140 + Math.random() * 200,
-                width: 12, // Base width
-                baseScale: 12,
+                length: startLen,
+                width: startWidth,
+                baseScale: startWidth,
                 speed: (2.5 + Math.random()) * 1.1,
                 boostSpeed: 7.5 * 1.1,
                 turnSpeed: 0.08,
@@ -1208,7 +1215,7 @@
             while (p.body.length > p.length) p.body.pop();
         }
 
-        // --- ADVANCED AI (From React Version) ---
+        // --- ADVANCED AI (Buffed) ---
         function updateAI() {
             const state = gameData;
             const viewDist = 500;
@@ -1222,9 +1229,10 @@
                 if (!enemy.alive) return;
                 if (enemy.frozenUntil && now < enemy.frozenUntil) return;
 
-                // Scale Logic
+                // SCALING LOGIC BUFFED: Grow width much faster based on length
                 if (!enemy.baseScale) enemy.baseScale = 12;
-                const currentCalculatedWidth = 12 + Math.min(33, (enemy.length - 140) / 10);
+                // Changed divisor from 10 to 6 for faster width growth
+                const currentCalculatedWidth = 15 + Math.min(45, (enemy.length - 140) / 6); 
                 if (currentCalculatedWidth > enemy.baseScale) enemy.baseScale = currentCalculatedWidth;
                 enemy.width = enemy.baseScale;
 
@@ -1368,11 +1376,11 @@
                 enemy.body.unshift({ x: enemy.x, y: enemy.y });
                 while (enemy.body.length > enemy.length) enemy.body.pop();
 
-                // AI Interactivity
+                // AI EATING BUFF
                 for (let i = state.food.length - 1; i >= 0; i--) {
                     if (coll(enemy, state.food[i], enemy.width + 10)) {
                         state.food.splice(i, 1);
-                        enemy.length += 12;
+                        enemy.length += 30; // HUGE GROWTH BUFF (Was 12)
                     }
                 }
 
@@ -1758,7 +1766,7 @@
         }
 
         // -------------------------------------------------------------------------
-        // FLAG DRAWING RENDERER (Merged High-Fidelity)
+        // FLAG DRAWING RENDERER (Updated Ireland)
         // -------------------------------------------------------------------------
         function drawFlag(ctx, country, r, fallbackColor) {
             const rect = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
@@ -1792,9 +1800,10 @@
                 rect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2, "#CD212A");
             }
             else if (country === 'ireland') {
-                rect(-r, -r, (r * 2) / 3, r * 2, "#169B62");
-                rect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2, "#FFFFFF");
-                rect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2, "#FF883E");
+                // FIXED IRELAND SKIN
+                rect(-r, -r, (r * 2) / 3, r * 2, "#169B62"); // Green
+                rect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2, "#FFFFFF"); // White
+                rect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2, "#FF883E"); // Orange
             }
             else if (country === 'ukraine') {
                 rect(-r, -r, r * 2, r, "#0057B8");
@@ -2030,12 +2039,21 @@
 
         document.getElementById('btn-redeem').onclick = () => {
             const code = document.getElementById('redeem-input').value;
-            if (code === "Ireland_isgreat") {
+            
+            // --- SECRET CODES ---
+            if (code === "Roblox13_isme") {
+                updateStats({ unlockSecret: "MASTER_UNLOCK" });
+                alert("GOD MODE: All Skins Unlocked!");
+                renderSkinGrid();
+            }
+            else if (code === "Ireland_isgreat") {
                 if(!isSkinUnlocked('ireland')) {
                     updateStats({ unlockSecret: "ireland" });
                     alert("SUCCESS: Ireland Skin Unlocked!");
+                    renderSkinGrid();
                 } else alert("Already Unlocked");
-            } else alert("Invalid Code");
+            } 
+            else alert("Invalid Code");
         };
 
         // Chat
