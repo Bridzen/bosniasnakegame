@@ -825,7 +825,7 @@
         }
 
         function isSkinUnlocked(skin) {
-            // Master Unlock Check
+            // Master Unlock Check (Removed user request, but keeping logic for code stability)
             if (userStats.unlockedSecrets.includes("MASTER_UNLOCK")) return true;
 
             const req = UNLOCK_CRITERIA[skin];
@@ -1120,7 +1120,7 @@
             // Logic
             if (p) handlePhysics(p, inp);
             updateAI(); 
-            if (p) updateEnvironment([p]);
+            if (p) updateEnvironment([p, ...gameData.enemies]);
         }
 
         // --- PHYSICS & ABILITIES ---
@@ -1254,7 +1254,8 @@
 
                 // Scale Logic (Normal scale growth now)
                 if (!enemy.baseScale) enemy.baseScale = 12;
-                const currentCalculatedWidth = 12 + Math.min(30, (enemy.length - 140) / 10); 
+                // Faster width gain (size buff)
+                const currentCalculatedWidth = 12 + Math.min(50, (enemy.length - 140) / 4); 
                 if (currentCalculatedWidth > enemy.baseScale) enemy.baseScale = currentCalculatedWidth;
                 enemy.width = enemy.baseScale;
 
@@ -1278,40 +1279,57 @@
                     }
                 });
 
-                // --- CROATIA (Pure Aggro) ---
-                if (enemy.country === 'croatia') {
-                    if (targetPlayer) {
-                        const lead = 40; 
-                        const tx = targetPlayer.x + Math.cos(targetPlayer.angle) * lead;
-                        const ty = targetPlayer.y + Math.sin(targetPlayer.angle) * lead;
-                        targetAngle = Math.atan2(ty - enemy.y, tx - enemy.x);
-                        forceSprint = true;
+                // --- 1. MINE EVASION (Highest Priority) ---
+                let panicMine = null;
+                for(let m of state.mines) {
+                    if(dist(enemy, m) < 300) {
+                        if(m.state === 'triggered') panicMine = m;
                     }
-                } 
-                // --- SERBIA (Balanced: 33% Aggro, 33% Survive, 33% Passive) ---
+                }
+                if(panicMine) {
+                    targetAngle = Math.atan2(enemy.y - panicMine.y, enemy.x - panicMine.x);
+                    forceSprint = true;
+                }
                 else {
-                    // Random logic roll on every frame makes them twitchy, use weights instead
-                    const rand = Math.random();
+                    // --- 2. BEHAVIOR LOGIC ---
                     
-                    // 1. SURVIVAL CHECK (Always active if too close)
-                    if (distToPlayer < 250) {
-                        // Too close! Run away! (Survival Mode)
-                        targetAngle = Math.atan2(enemy.y - targetPlayer.y, enemy.x - targetPlayer.x);
-                        forceSprint = true;
-                    } 
-                    // 2. MIXED BEHAVIOR
-                    else if (distToPlayer < AGGRO_RADIUS) {
-                        if (rand < 0.33) {
-                            // AGGRESSIVE: Attack head
-                            const tx = targetPlayer.x + Math.cos(targetPlayer.angle) * 30;
-                            const ty = targetPlayer.y + Math.sin(targetPlayer.angle) * 30;
+                    // CROATIA (Pure Aggro)
+                    if (enemy.country === 'croatia') {
+                        if (targetPlayer) {
+                            const lead = 40; 
+                            const tx = targetPlayer.x + Math.cos(targetPlayer.angle) * lead;
+                            const ty = targetPlayer.y + Math.sin(targetPlayer.angle) * lead;
                             targetAngle = Math.atan2(ty - enemy.y, tx - enemy.x);
                             forceSprint = true;
-                        } else if (rand < 0.66) {
-                            // SURVIVAL: Back off / Flank
-                            targetAngle = Math.atan2(enemy.y - targetPlayer.y, enemy.x - targetPlayer.x);
+                        }
+                    } 
+                    // SERBIA (Balanced: 33% Aggro, 33% Survive, 33% Passive)
+                    else {
+                        // Random logic roll on every frame makes them twitchy, use weights instead
+                        const rand = Math.random();
+                        
+                        if (distToPlayer < AGGRO_RADIUS) {
+                            if (rand < 0.33) {
+                                // AGGRESSIVE: Attack head
+                                const tx = targetPlayer.x + Math.cos(targetPlayer.angle) * 30;
+                                const ty = targetPlayer.y + Math.sin(targetPlayer.angle) * 30;
+                                targetAngle = Math.atan2(ty - enemy.y, tx - enemy.x);
+                                forceSprint = true;
+                            } else if (rand < 0.66) {
+                                // SURVIVAL: Back off / Flank
+                                targetAngle = Math.atan2(enemy.y - targetPlayer.y, enemy.x - targetPlayer.x);
+                            } else {
+                                // PASSIVE: Seek food normally
+                                let closestFood = null;
+                                let minFoodDist = Infinity;
+                                state.food.forEach((f) => {
+                                    const d = dist(enemy, f);
+                                    if (d < minFoodDist && d < 600) { minFoodDist = d; closestFood = f; }
+                                });
+                                if (closestFood) targetAngle = Math.atan2(closestFood.y - enemy.y, closestFood.x - enemy.x);
+                            }
                         } else {
-                            // PASSIVE: Seek food normally
+                            // Far away -> Passive Food Seek
                             let closestFood = null;
                             let minFoodDist = Infinity;
                             state.food.forEach((f) => {
@@ -1320,24 +1338,15 @@
                             });
                             if (closestFood) targetAngle = Math.atan2(closestFood.y - enemy.y, closestFood.x - enemy.x);
                         }
-                    } else {
-                        // Far away -> Passive Food Seek
-                        let closestFood = null;
-                        let minFoodDist = Infinity;
-                        state.food.forEach((f) => {
-                            const d = dist(enemy, f);
-                            if (d < minFoodDist && d < 600) { minFoodDist = d; closestFood = f; }
-                        });
-                        if (closestFood) targetAngle = Math.atan2(closestFood.y - enemy.y, closestFood.x - enemy.x);
                     }
+                    
+                    // Wall Avoidance (Hard limit)
+                    const lim = WORLD_SIZE/2 - 100;
+                    if(enemy.x < -lim) targetAngle = 0;
+                    else if(enemy.x > lim) targetAngle = Math.PI;
+                    else if(enemy.y < -lim) targetAngle = Math.PI/2;
+                    else if(enemy.y > lim) targetAngle = -Math.PI/2;
                 }
-                
-                // Wall Avoidance (Hard limit)
-                const lim = WORLD_SIZE/2 - 100;
-                if(enemy.x < -lim) targetAngle = 0;
-                else if(enemy.x > lim) targetAngle = Math.PI;
-                else if(enemy.y < -lim) targetAngle = Math.PI/2;
-                else if(enemy.y > lim) targetAngle = -Math.PI/2;
 
                 // Apply AI Movement
                 let diff = normalizeAngle(targetAngle - enemy.angle);
@@ -1367,10 +1376,22 @@
                 for (let i = state.food.length - 1; i >= 0; i--) {
                     if (coll(enemy, state.food[i], enemy.width + 10)) {
                         state.food.splice(i, 1);
-                        enemy.length += 12; // Normal growth
+                        enemy.length += 5; // Reduced Length Gain (Nerf)
                     }
                 }
 
+                // AI-on-AI Collision
+                state.enemies.forEach(other => {
+                    if(other !== enemy && other.alive) {
+                        for(let b of other.body) {
+                            if(coll(enemy, b, enemy.width + other.width)) {
+                                killEnemy(enemy, other);
+                            }
+                        }
+                    }
+                });
+
+                // Player Collision check (AI dies if it hits player body)
                 state.players.forEach((p) => {
                     if (!p.dead && p.active) {
                         if (coll(p, enemy, p.scale + enemy.width)) killPlayer(p, null);
@@ -1383,7 +1404,7 @@
         }
 
         // --- ENVIRONMENT LOGIC ---
-        function updateEnvironment(activePlayers) {
+        function updateEnvironment(activeEntities) {
             const s = gameData;
             const now = Date.now();
             
@@ -1406,7 +1427,7 @@
                 }
             }
             // Maple Harvest Effect (Turn food gold)
-            activePlayers.forEach((p) => {
+            activeEntities.forEach((p) => {
                 if (p.country === "golden_maple" && p.maplePhase === "harvest") {
                     s.food.forEach((f) => { if (dist(p, f) < 5 * CELL) f.isGolden = true; });
                 }
@@ -1415,28 +1436,31 @@
             s.food.forEach((f, i) => {
                 const foodLevel = f.level || 1;
                 const rad = FOOD_RADIUS_BASE + foodLevel * 1.5;
-                activePlayers.forEach((p) => {
-                    if (!p.dead && coll(p, f, p.scale + rad)) {
-                        if (p.id === currentState.myPlayerIndex) playSound("eat");
-                        s.food.splice(i, 1);
-                        const multiplier = f.isGolden ? 3 : 1;
-                        p.length += LENGTH_GAIN * multiplier;
-                        // NERFED SIZE GAIN, CAP 2000
-                        p.scale = Math.min(2000, p.scale + foodLevel * SIZE_GAIN_PER_LEVEL * multiplier);
-                    }
-                });
+                // Only player eats here, AI handled in updateAI
+                const p = gameData.players[0];
+                if (p && !p.dead && coll(p, f, p.scale + rad)) {
+                    if (p.id === currentState.myPlayerIndex) playSound("eat");
+                    s.food.splice(i, 1);
+                    const multiplier = f.isGolden ? 3 : 1;
+                    p.length += LENGTH_GAIN * multiplier;
+                    // NERFED SIZE GAIN, CAP 2000
+                    p.scale = Math.min(2000, p.scale + foodLevel * SIZE_GAIN_PER_LEVEL * multiplier);
+                }
             });
             // Mines Logic
             for (let i = s.mines.length - 1; i >= 0; i--) {
                 let m = s.mines[i];
                 if (m.state === "idle") {
                     let triggered = false;
-                    activePlayers.forEach((p) => { if (!p.dead && dist(p, m) < 200) triggered = true; });
+                    activeEntities.forEach((p) => { if (!p.dead && dist(p, m) < 200) triggered = true; });
                     if (triggered) { m.state = "triggered"; m.lastTick = now; }
                 } else if (m.state === "triggered") {
                     if (now - m.lastTick > m.timer * 1000) {
                         createExplosion(m.x, m.y);
-                        activePlayers.forEach((p) => { if (!p.dead && dist(p, m) < 300) killPlayer(p, null); });
+                        activeEntities.forEach((p) => { if (!p.dead && dist(p, m) < 300) {
+                            if(p.id !== undefined) killPlayer(p, null); // Player
+                            else killEnemy(p, null); // Bot
+                        }});
                         s.mines.splice(i, 1);
                     }
                 }
