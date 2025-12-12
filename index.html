@@ -1,9 +1,11 @@
+User
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: Ultimate World Edition (AI Update)</title>
+    <title>Bosnia Snake: Kingdom Update</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -469,6 +471,7 @@
                 <div class="row"><span>DEATHS</span><span id="stat-deaths" style="color: #FECB00">0</span></div>
                 <div class="row"><span>BEST SIZE</span><span id="stat-best-size" style="color: #FECB00">18.0</span></div>
                 <div class="row"><span>GAMES</span><span id="stat-games" style="color: #FECB00">0</span></div>
+                <div class="row"><span>MAX MINES</span><span id="stat-mines" style="color: #FECB00">0</span></div>
                 <div class="row"><span>MAX LENGTH</span><span id="stat-length" style="color: #FECB00">140</span></div>
                 
                 <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid #333;">
@@ -641,12 +644,13 @@
             "bosnia", "russia", "germany", "france", "canada", "ukraine", 
             "usa", "uk", "italy", "poland", "sweden", "denmark"
         ];
-        const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple"];
+        const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple", "bosnian_kingdom"];
 
         const SKIN_BODY_COLORS = {
             bosnia: "#002F6C", russia: "#FFFFFF", germany: "#000000", france: "#0055A4", 
             canada: "#FF0000", ukraine: "#0057B8", ireland: "#169B62", soviet: "#CC0000", 
-            golden_maple: "#DAA520", usa: "#3C3B6E", uk: "#012169", italy: "#008C45", 
+            golden_maple: "#DAA520", bosnian_kingdom: "#002395", // Royal Blue
+            usa: "#3C3B6E", uk: "#012169", italy: "#008C45", 
             poland: "#DC143C", sweden: "#006AA7", denmark: "#C60C30", serbia: "#C6363C",
             croatia: "#CC0000"
         };
@@ -667,6 +671,7 @@
             ireland: { type: "code", label: "Secret Code" },
             soviet: { type: "custom_soviet", label: "Russia + Size 500 + 50 Kills" },
             golden_maple: { type: "custom_maple", label: "Canada + Size 250 + 150 Kills" },
+            bosnian_kingdom: { type: "custom_kingdom", label: "Bosnia + Size 271 + 40 Kills + 20 Mines (1 Game)" },
         };
 
         // -------------------------------------------------------------------------
@@ -763,6 +768,7 @@
             bestScale: 18,
             bestLength: 140,
             gamesPlayed: 0,
+            maxMinesInGame: 0,
             unlockedSecrets: []
         };
         try {
@@ -821,6 +827,7 @@
             document.getElementById('stat-deaths').innerText = userStats.totalDeaths;
             document.getElementById('stat-best-size').innerText = userStats.bestScale.toFixed(1);
             document.getElementById('stat-games').innerText = userStats.gamesPlayed;
+            document.getElementById('stat-mines').innerText = userStats.maxMinesInGame || 0;
             document.getElementById('stat-length').innerText = Math.round(userStats.bestLength);
         }
 
@@ -836,6 +843,14 @@
             if (skin === "golden_maple") {
                 return isSkinUnlocked("canada") && userStats.bestScale >= 250 && userStats.totalKills >= 150;
             }
+            if (skin === "bosnian_kingdom") {
+                // Requires: Bosnia Unlocked (Default is yes), Size 271, 40 Total Kills, 20 Mines in single game
+                return isSkinUnlocked("bosnia") && 
+                       userStats.bestScale >= 271 && 
+                       userStats.totalKills >= 40 && 
+                       userStats.maxMinesInGame >= 20;
+            }
+
             if (req.type === "default") return true;
             if (req.type === "code") return userStats.unlockedSecrets.includes(skin);
             if (req.type === "kills") return userStats.totalKills >= req.val;
@@ -861,6 +876,11 @@
             if (updates.length && updates.length > userStats.bestLength) {
                 userStats.bestLength = updates.length; changed = true;
             }
+            if (updates.minesExploded && updates.minesExploded > userStats.maxMinesInGame) {
+                userStats.maxMinesInGame = updates.minesExploded;
+                changed = true;
+            }
+
             if (changed) {
                 localStorage.setItem('bosnia_snake_stats_v2', JSON.stringify(userStats));
                 updateStatsUI();
@@ -919,6 +939,8 @@
                     abilityActive: false,
                     lastAbilityTime: 0,
                     maplePhase: null,
+                    kingdomPhase: null,
+                    minesExplodedCurrentGame: 0,
                     name: currentState.playerName
                 }];
                 
@@ -1032,6 +1054,8 @@
                 p.abilityActive = false;
                 p.lastAbilityTime = 0;
                 p.maplePhase = null;
+                p.kingdomPhase = null;
+                p.minesExplodedCurrentGame = 0;
                 // Soviet Reset
                 p.barrageActive = false;
                 p.barrageStartTime = 0;
@@ -1201,6 +1225,68 @@
                     if (now > p.phaseEndTime) p.maplePhase = null;
                 }
             }
+            // 3. BOSNIAN KINGDOM ABILITY
+            else if (p.country === "bosnian_kingdom") {
+                const cooldown = 30000;
+                // Trigger
+                if (inp.triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > cooldown)) {
+                    p.kingdomPhase = "active";
+                    p.phaseEndTime = now + 1500; // 1.5 Seconds duration
+                    p.lastAbilityTime = now;
+                    playSound("soviet_boom"); // Re-use boom sound for activation
+                    
+                    // INSTANT EFFECT: Transmute Radius (2 Tiles = 300 units)
+                    const radius = 300;
+                    
+                    // 1. Convert Food -> Mines
+                    for (let i = gameData.food.length - 1; i >= 0; i--) {
+                        if (dist(p, gameData.food[i]) < radius) {
+                            // Remove food
+                            gameData.food.splice(i, 1);
+                            // Add Mine
+                            gameData.mines.push({
+                                x: p.x + (Math.random()-0.5)*50, // Slight jitter
+                                y: p.y + (Math.random()-0.5)*50,
+                                state: "idle",
+                                type: "bosnian", // Special Type
+                                ownerId: p.id,   // Owner Immunity
+                                timer: 0.5,      // Fast trigger
+                                lastTick: now
+                            });
+                        }
+                    }
+
+                    // 2. Convert Enemy Mines -> Your Mines
+                    gameData.mines.forEach(m => {
+                        if (dist(p, m) < radius && m.type !== "bosnian") {
+                            m.type = "bosnian";
+                            m.ownerId = p.id;
+                            m.state = "idle"; // Reset state so it doesn't blow up immediately if we are on it
+                        }
+                    });
+
+                    // 3. Spawn Protective Ring (8 Mines)
+                    for(let i=0; i<8; i++) {
+                        const angle = (i / 8) * Math.PI * 2;
+                        const mx = p.x + Math.cos(angle) * 250; // Slightly inside the 300 radius
+                        const my = p.y + Math.sin(angle) * 250;
+                        gameData.mines.push({
+                            x: mx, y: my,
+                            state: "idle",
+                            type: "bosnian",
+                            ownerId: p.id,
+                            timer: 0.5,
+                            lastTick: now
+                        });
+                    }
+                }
+                
+                // End Phase
+                if (p.kingdomPhase === "active" && now > p.phaseEndTime) {
+                    p.kingdomPhase = null;
+                }
+            }
+
 
             // MOVEMENT
             let speedMult = 1.0;
@@ -1539,20 +1625,58 @@
                     }
                 });
             });
+            
             // Mines Logic
             for (let i = s.mines.length - 1; i >= 0; i--) {
                 let m = s.mines[i];
+                const isBosnian = m.type === "bosnian";
+                const triggerRadius = 200; 
+                const explodeRadius = isBosnian ? 900 : 300; // 3x Bigger (900 vs 300)
+                const delay = isBosnian ? 500 : 3000; // 0.5s vs 3.0s
+
                 if (m.state === "idle") {
                     let triggered = false;
-                    activeEntities.forEach((p) => { if (!p.dead && dist(p, m) < 200) triggered = true; });
-                    if (triggered) { m.state = "triggered"; m.lastTick = now; }
-                } else if (m.state === "triggered") {
-                    if (now - m.lastTick > m.timer * 1000) {
-                        createExplosion(m.x, m.y);
-                        activeEntities.forEach((p) => { if (!p.dead && dist(p, m) < 300) {
-                            if(p.id !== undefined) killPlayer(p, null); // Player
-                            else killEnemy(p, null); // Bot
-                        }});
+                    let triggerer = null;
+
+                    activeEntities.forEach((p) => { 
+                        if (!p.dead) {
+                            // OWNER IMMUNITY: Bosnian mines don't trigger for owner
+                            if (isBosnian && p.id === m.ownerId) return;
+
+                            if (dist(p, m) < triggerRadius) {
+                                triggered = true;
+                                triggerer = p;
+                            }
+                        }
+                    });
+
+                    if (triggered) { 
+                        m.state = "triggered"; 
+                        m.lastTick = now; 
+                        
+                        // STAT TRACKING: If player triggered a non-Bosnian mine, count it
+                        // (Unlocking the skin requires exploding mines)
+                        if (triggerer && triggerer.id === currentState.myPlayerIndex && !isBosnian) {
+                            triggerer.minesExplodedCurrentGame = (triggerer.minesExplodedCurrentGame || 0) + 1;
+                            updateStats({ minesExploded: triggerer.minesExplodedCurrentGame });
+                        }
+                    }
+                } 
+                else if (m.state === "triggered") {
+                    if (now - m.lastTick > delay) {
+                        createExplosion(m.x, m.y, isBosnian ? 200 : 10); // Visual size
+                        
+                        activeEntities.forEach((p) => { 
+                            if (!p.dead) {
+                                // OWNER IMMUNITY: Explosion doesn't kill owner
+                                if (isBosnian && p.id === m.ownerId) return;
+
+                                if (dist(p, m) < explodeRadius) {
+                                    if(p.id !== undefined) killPlayer(p, null); // Player
+                                    else killEnemy(p, null); // Bot
+                                }
+                            }
+                        });
                         s.mines.splice(i, 1);
                     }
                 }
@@ -1578,6 +1702,7 @@
             victim.deaths++;
             victim.abilityActive = false;
             victim.maplePhase = null;
+            victim.kingdomPhase = null;
 
             if (victim.id === currentState.myPlayerIndex) {
                 updateStats({ death: true, scale: victim.scale, length: victim.length });
@@ -1626,7 +1751,7 @@
                 mode: state.mode,
                 shakeIntensity: Math.round(state.shakeIntensity),
                 food: state.food.map((f) => ({ x: Math.round(f.x), y: Math.round(f.y), l: f.level, g: f.isGolden ? 1 : 0 })),
-                mines: state.mines.map((m) => ({ x: Math.round(m.x), y: Math.round(m.y), state: m.state })),
+                mines: state.mines.map((m) => ({ x: Math.round(m.x), y: Math.round(m.y), state: m.state, type: m.type })),
                 explosions: state.explosions.map((e) => ({
                     x: Math.round(e.x), y: Math.round(e.y), radius: Math.round(e.radius), alpha: Number(e.alpha.toFixed(2))
                 })),
@@ -1635,7 +1760,7 @@
                     id: p.id, active: p.active, dead: p.dead, x: Math.round(p.x), y: Math.round(p.y),
                     angle: Number(p.angle.toFixed(2)), scale: Number(p.scale.toFixed(2)), length: Math.round(p.length),
                     country: p.country, colorBody: p.colorBody, kills: p.kills, deaths: p.deaths,
-                    frozenUntil: p.frozenUntil || 0, abilityActive: p.abilityActive || false, maplePhase: p.maplePhase, name: p.name
+                    frozenUntil: p.frozenUntil || 0, abilityActive: p.abilityActive || false, maplePhase: p.maplePhase, kingdomPhase: p.kingdomPhase, name: p.name
                 })),
                 enemies: state.enemies.map((e) => ({
                     alive: e.alive, color: e.color, width: Math.round(e.width), x: Math.round(e.x), y: Math.round(e.y),
@@ -1698,7 +1823,7 @@
                         p.x = lerp(p.x, tp.x, t); p.y = lerp(p.y, tp.y, t);
                         p.angle = lerpAngle(p.angle, tp.angle, t);
                         p.scale = tp.scale; p.country = tp.country; p.dead = tp.dead;
-                        p.name = tp.name; p.abilityActive = tp.abilityActive; p.maplePhase = tp.maplePhase;
+                        p.name = tp.name; p.abilityActive = tp.abilityActive; p.maplePhase = tp.maplePhase; p.kingdomPhase = tp.kingdomPhase;
                         if (!p.body) p.body = [];
                         p.body.unshift({ x: p.x, y: p.y });
                         while (p.body.length > tp.length) p.body.pop();
@@ -1730,11 +1855,13 @@
             // Ability HUD
             const abInd = document.getElementById('ability-indicator');
             const abTxt = document.getElementById('ability-text');
-            if(me.country === 'soviet' || me.country === 'golden_maple') {
+            if(me.country === 'soviet' || me.country === 'golden_maple' || me.country === 'bosnian_kingdom') {
                 abInd.style.display = 'flex';
-                const cooldown = 60000;
+                let cooldown = 60000;
+                if (me.country === 'bosnian_kingdom') cooldown = 30000;
+
                 const timeSince = Date.now() - (me.lastAbilityTime || 0);
-                const isActive = me.barrageActive || !!me.maplePhase;
+                const isActive = me.barrageActive || !!me.maplePhase || (me.kingdomPhase === "active");
                 
                 if (isActive) {
                     abTxt.innerText = "ACTIVE";
@@ -1824,6 +1951,23 @@
                     ctx.fillStyle = "rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, Math.PI * 2); ctx.fill();
                 }
                 const r = 25; const d = r * 2;
+                
+                // BOSNIAN MINE RENDER
+                if (m.type === "bosnian") {
+                    ctx.save();
+                    ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.clip();
+                    ctx.fillStyle = "#002395"; ctx.fillRect(m.x-r, m.y-r, r*2, r*2);
+                    // Gold center
+                    ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(m.x, m.y, r/2, 0, Math.PI*2); ctx.fill();
+                    ctx.restore();
+                    // Red outline if triggered
+                    ctx.strokeStyle = m.state === "triggered" ? "red" : "#FFD700"; 
+                    ctx.lineWidth = 3; 
+                    ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.stroke();
+                    return; 
+                }
+
+                // NORMAL MINE RENDER
                 ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.clip();
                 // Mine Art (Detailed Flag Style)
                 ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3);
@@ -1848,6 +1992,19 @@
                 else if (p.country === "golden_maple" && p.maplePhase === "harvest") {
                     ctx.shadowBlur = 40; ctx.shadowColor = "#DAA520";
                     ctx.strokeStyle = "rgba(218, 165, 32, 0.4)"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(p.x, p.y, 5 * CELL, 0, Math.PI * 2); ctx.stroke();
+                }
+
+                // BOSNIAN KINGDOM RING EFFECT
+                if (p.country === "bosnian_kingdom" && p.kingdomPhase === "active") {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 300, 0, Math.PI*2);
+                    ctx.strokeStyle = "rgba(0, 35, 149, 0.6)";
+                    ctx.lineWidth = 10;
+                    ctx.stroke();
+                    ctx.fillStyle = "rgba(0, 35, 149, 0.2)";
+                    ctx.fill();
+                    ctx.restore();
                 }
 
                 // Body
@@ -1904,6 +2061,20 @@
                 ctx.fillStyle = "#FECB00"; ctx.beginPath(); ctx.moveTo(r * 0.2, -r); ctx.lineTo(r * 0.2, r); ctx.lineTo(r, -r * 0.5); ctx.fill();
                 ctx.fillStyle = "white";
                 for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.6 + i * r * 0.4, r * 0.1, 0, Math.PI * 2); ctx.fill(); }
+            }
+            else if (country === 'bosnian_kingdom') {
+                // Medieval Coat of Arms (Simplified)
+                rect(-r, -r, r * 2, r * 2, "#002395"); // Royal Blue
+                // White Diagonal Band
+                ctx.fillStyle = "white";
+                ctx.beginPath();
+                ctx.moveTo(-r, -r); ctx.lineTo(r, r); 
+                ctx.lineTo(r, r-r/2); ctx.lineTo(-r+r/2, -r); 
+                ctx.fill();
+                // Golden Lilies (Yellow Dots)
+                ctx.fillStyle = "#FFD700";
+                ctx.beginPath(); ctx.arc(-r/2, r/2, r/4, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(r/2, -r/2, r/4, 0, Math.PI*2); ctx.fill();
             }
             else if (country === 'russia') {
                 rect(-r, -r, r * 2, (r * 2) / 3, "white");
@@ -2281,3 +2452,4 @@
     </script>
 </body>
 </html>
+```
