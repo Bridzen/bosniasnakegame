@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: Ultimate World Edition</title>
+    <title>Bosnia Snake: Ultimate World Edition (AI Update)</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -46,13 +46,13 @@
             top: 20px;
             left: 20px;
             width: 240px;
-            height: 85px;
+            height: 60px;
             background: rgba(0, 15, 60, 0.7);
             border: 2px solid #0055A4;
             border-radius: 10px;
             display: none; /* Hidden on start */
-            flex-direction: column;
-            justify-content: center;
+            align-items: center;
+            justify-content: space-between;
             padding: 0 15px;
             box-sizing: border-box;
             backdrop-filter: blur(5px);
@@ -70,13 +70,6 @@
             font-size: 16px; 
             color: #FECB00; 
             text-shadow: 1px 1px 2px black;
-        }
-        
-        #hud-mines {
-            font-size: 12px;
-            color: #ccc;
-            margin-top: 4px;
-            font-weight: bold;
         }
 
         /* --- ABILITY INDICATOR (For Special Skins) --- */
@@ -457,7 +450,6 @@
         <div id="hud">
             <div id="hud-size">Size: 18.0</div>
             <div id="hud-kills">Kills: 0</div>
-            <div id="hud-mines">Mines Triggered: 0</div>
         </div>
 
         <!-- ABILITY HUD -->
@@ -649,14 +641,14 @@
             "bosnia", "russia", "germany", "france", "canada", "ukraine", 
             "usa", "uk", "italy", "poland", "sweden", "denmark"
         ];
-        const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple", "bosnian_kingdom"];
+        const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple"];
 
         const SKIN_BODY_COLORS = {
             bosnia: "#002F6C", russia: "#FFFFFF", germany: "#000000", france: "#0055A4", 
             canada: "#FF0000", ukraine: "#0057B8", ireland: "#169B62", soviet: "#CC0000", 
-            golden_maple: "#DAA520", bosnian_kingdom: "#002395", usa: "#3C3B6E", uk: "#012169", 
-            italy: "#008C45", poland: "#DC143C", sweden: "#006AA7", denmark: "#C60C30", 
-            serbia: "#C6363C", croatia: "#CC0000"
+            golden_maple: "#DAA520", usa: "#3C3B6E", uk: "#012169", italy: "#008C45", 
+            poland: "#DC143C", sweden: "#006AA7", denmark: "#C60C30", serbia: "#C6363C",
+            croatia: "#CC0000"
         };
 
         const UNLOCK_CRITERIA = {
@@ -675,7 +667,6 @@
             ireland: { type: "code", label: "Secret Code" },
             soviet: { type: "custom_soviet", label: "Russia + Size 500 + 50 Kills" },
             golden_maple: { type: "custom_maple", label: "Canada + Size 250 + 150 Kills" },
-            bosnian_kingdom: { type: "custom_kingdom", label: "Bosnia + 30 Kills + Len 210 + 100 Mines" }
         };
 
         // -------------------------------------------------------------------------
@@ -701,7 +692,7 @@
                 gainNode.gain.linearRampToValueAtTime(0.01, now + 0.1);
                 osc.start(now);
                 osc.stop(now + 0.1);
-            } else if (type === "soviet_boom" || type === "bosnian_boom") {
+            } else if (type === "soviet_boom") {
                 const bufferSize = audioCtx.sampleRate * 1.5;
                 const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
                 const data = buffer.getChannelData(0);
@@ -834,7 +825,7 @@
         }
 
         function isSkinUnlocked(skin) {
-            // Master Unlock Check
+            // Master Unlock Check (Removed user request, but keeping logic for code stability)
             if (userStats.unlockedSecrets.includes("MASTER_UNLOCK")) return true;
 
             const req = UNLOCK_CRITERIA[skin];
@@ -845,10 +836,6 @@
             if (skin === "golden_maple") {
                 return isSkinUnlocked("canada") && userStats.bestScale >= 250 && userStats.totalKills >= 150;
             }
-            if (skin === "bosnian_kingdom") {
-                return userStats.unlockedSecrets.includes("bosnian_kingdom");
-            }
-
             if (req.type === "default") return true;
             if (req.type === "code") return userStats.unlockedSecrets.includes(skin);
             if (req.type === "kills") return userStats.totalKills >= req.val;
@@ -867,7 +854,6 @@
             if (updates.unlockSecret && !userStats.unlockedSecrets.includes(updates.unlockSecret)) {
                 userStats.unlockedSecrets.push(updates.unlockSecret);
                 changed = true;
-                addChatMessage("SYSTEM", `UNLOCKED: ${updates.unlockSecret.toUpperCase()}`, "lime");
             }
             if (updates.scale && updates.scale > userStats.bestScale) {
                 userStats.bestScale = updates.scale; changed = true;
@@ -933,8 +919,7 @@
                     abilityActive: false,
                     lastAbilityTime: 0,
                     maplePhase: null,
-                    name: currentState.playerName,
-                    minesTriggered: 0 // New stat for Bosnia Kingdom unlock
+                    name: currentState.playerName
                 }];
                 
                 resetWorld(true);
@@ -1031,8 +1016,7 @@
                     y: randPosCell(),
                     state: "idle",
                     timer: 3.0,
-                    lastTick: Date.now(),
-                    isBosnian: false // New property for Bosnian Mines
+                    lastTick: Date.now()
                 });
             }
 
@@ -1053,8 +1037,6 @@
                 p.barrageStartTime = 0;
                 p.nextExplosionTime = 0;
                 p.sovietBoost = false;
-                // Bosnia Kingdom Reset (RESET MINES TRIGGERED ON DEATH/RESTART)
-                p.minesTriggered = 0; 
             });
 
             // Enemies
@@ -1064,6 +1046,7 @@
             }
         }
 
+        // --- NEW ENEMY SPAWN LOGIC (Super Fast Kamikaze) ---
         function spawnOneEnemy() {
             const startLen = 140 + Math.random() * 100; 
             const startWidth = 14;
@@ -1071,9 +1054,12 @@
             // CROATIA SPAWN LOGIC: 5% chance if player is > 100 size
             const player = gameData.players[0];
             let isCroatia = false;
-            if (player && player.scale > 100 && Math.random() < 0.05) {
+            if (player && player.scale > 100 && Math.random() < 0.08) { 
                 isCroatia = true;
             }
+
+            // Personality Setup
+            const personality = isCroatia ? 'pure_aggro' : 'balanced';
 
             gameData.enemies.push({
                 x: randPosCell(),
@@ -1083,15 +1069,17 @@
                 length: startLen,
                 width: startWidth,
                 baseScale: startWidth,
+                // SPEED BUFFS
                 speed: (2.5 + Math.random()) * 1.1,
-                boostSpeed: 7.5 * 1.1,
-                turnSpeed: 0.08,
+                // Kamikaze is now MUCH faster (was 7.5, now 16.0)
+                boostSpeed: isCroatia ? 16.0 : 8.5, 
+                // Kamikaze turns slightly tighter to handle high speed
+                turnSpeed: isCroatia ? 0.12 : 0.08, 
                 alive: true,
                 color: isCroatia ? "#CC0000" : "#C6363C", 
-                country: isCroatia ? "croatia" : "serbia", // Default Serbia
+                country: isCroatia ? "croatia" : "serbia", 
                 frozenUntil: 0,
-                // Personality: Aggressive (Divebomb) vs Balanced
-                personality: isCroatia ? 'pure_aggro' : 'balanced' 
+                personality: personality
             });
         }
 
@@ -1213,54 +1201,6 @@
                     if (now > p.phaseEndTime) p.maplePhase = null;
                 }
             }
-            // 3. BOSNIAN KINGDOM (New Ability)
-            else if (p.country === "bosnian_kingdom") {
-                const cooldown = 30000;
-                
-                // Trigger Logic
-                if (inp.triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > cooldown)) {
-                    p.lastAbilityTime = now;
-                    p.abilityActive = true; // For visual flash
-                    p.abilityEndTime = now + 1500; // DURATION NOW 1.5 SECONDS
-                    playSound("bosnian_boom");
-                }
-                
-                // Continuous Active Logic (Move with it)
-                if (p.abilityActive) {
-                    if (now > p.abilityEndTime) {
-                        p.abilityActive = false;
-                    } else {
-                        const range = 2 * CELL; 
-                        
-                        // A. Convert existing Mines continuously
-                        gameData.mines.forEach(m => {
-                            if (dist(p, m) < range && !m.isBosnian) {
-                                m.isBosnian = true;
-                                if (m.state === 'triggered') m.timer = 0; // Instant trigger if already angry
-                            }
-                        });
-
-                        // B. Convert FOOD continuously
-                        // Loop backwards because we are removing items
-                        for (let i = gameData.food.length - 1; i >= 0; i--) {
-                            const f = gameData.food[i];
-                            if (dist(p, f) < range) {
-                                // Create a new Bosnian mine at food location
-                                gameData.mines.push({
-                                    x: f.x,
-                                    y: f.y,
-                                    state: "idle",
-                                    timer: 3.0,
-                                    lastTick: now,
-                                    isBosnian: true // Your mine now
-                                });
-                                // Remove the food
-                                gameData.food.splice(i, 1);
-                            }
-                        }
-                    }
-                }
-            }
 
             // MOVEMENT
             let speedMult = 1.0;
@@ -1308,19 +1248,20 @@
             while (p.body.length > p.length) p.body.pop();
         }
 
-        // --- SMART AI (Vector-Based Steering) ---
+        // --- NEW INTELLIGENT AI (Anti-Loop, Smart Avoidance, Aggro) ---
         function updateAI() {
             const state = gameData;
             const now = Date.now();
-            const AGGRO_RADIUS = 600; 
+            const AGGRO_RADIUS = 900; // Increased view range
 
             state.enemies.forEach((enemy) => {
                 if (!enemy.alive) return;
                 if (enemy.frozenUntil && now < enemy.frozenUntil) return;
 
-                // --- 1. GROW CHUNKY FAST (Width Buff) ---
+                // --- 1. GROW CHUNKY ---
                 if (!enemy.baseScale) enemy.baseScale = 12;
-                const currentCalculatedWidth = 12 + Math.min(50, (enemy.length - 140) / 4); 
+                // Cap width logic slightly differently so they don't get too fat to move
+                const currentCalculatedWidth = 12 + Math.min(60, (enemy.length - 140) / 4); 
                 if (currentCalculatedWidth > enemy.baseScale) enemy.baseScale = currentCalculatedWidth;
                 enemy.width = enemy.baseScale;
 
@@ -1336,131 +1277,196 @@
                 let finalY = 0;
                 let forceSprint = false;
 
-                // Find Target
-                let targetPlayer = null;
-                let distToPlayer = Infinity;
-                state.players.forEach((p) => {
-                    if (!p.dead && p.active) {
-                        const d = dist(enemy, p);
-                        if(d < distToPlayer) { distToPlayer = d; targetPlayer = p; }
+                // A. WALL AVOIDANCE (The Anti-Loop Fix)
+                // Instead of sliding, we pull them towards the center (0,0) if they get too close to edge
+                const distFromCenter = dist(enemy, {x:0, y:0});
+                const mapEdge = WORLD_SIZE / 2;
+                const safetyMargin = 300; // Start turning back 300 units before wall
+
+                if (distFromCenter > mapEdge - safetyMargin) {
+                    // Strong vector pointing exactly at the center of the map
+                    // The closer to the wall, the stronger the pull
+                    const panicFactor = (distFromCenter - (mapEdge - safetyMargin)) / safetyMargin; // 0 to 1
+                    const pullStrength = panicFactor * 5000; // Massive force
+                    
+                    finalX -= enemy.x * pullStrength; // -x points to 0
+                    finalY -= enemy.y * pullStrength; // -y points to 0
+                }
+
+                // B. THREAT AVOIDANCE (Scaling with Size)
+                // The bigger the snake, the further ahead it looks to avoid crashing
+                const mySizeMultiplier = Math.max(1, enemy.width / 15);
+                const detectionRange = 200 * mySizeMultiplier; 
+
+                // Avoid Players
+                state.players.forEach(p => {
+                    if(!p.dead) {
+                        // Avoid Head (if they are bigger)
+                        if (p.scale > enemy.width) {
+                            const d = dist(enemy, p);
+                            if (d < detectionRange + p.scale) {
+                                const push = 10000 / (d + 1);
+                                finalX -= (p.x - enemy.x) * push;
+                                finalY -= (p.y - enemy.y) * push;
+                            }
+                        }
+                        
+                        // Avoid Body
+                        for(let i=0; i < p.body.length; i+=2) {
+                            const b = p.body[i];
+                            const d = dist(enemy, b);
+                            // Big snakes need more room to turn
+                            if(d < detectionRange) {
+                                const push = (15000 * mySizeMultiplier) / (d + 1);
+                                finalX -= (b.x - enemy.x) * push;
+                                finalY -= (b.y - enemy.y) * push;
+                            }
+                        }
                     }
                 });
 
-                // A. GOAL SEEKING (Food or Player)
-                if (enemy.country === 'croatia' && targetPlayer) {
-                    // Always hunt player
-                    const dx = targetPlayer.x - enemy.x;
-                    const dy = targetPlayer.y - enemy.y;
-                    finalX += dx * 2.0; finalY += dy * 2.0;
-                    forceSprint = true;
-                } else if (targetPlayer && distToPlayer < AGGRO_RADIUS) {
-                    // Mixed behavior
-                    const dx = targetPlayer.x - enemy.x;
-                    const dy = targetPlayer.y - enemy.y;
-                    finalX += dx * 1.5; finalY += dy * 1.5;
-                    if(Math.random()<0.05) forceSprint = true;
-                } else {
-                    // Food seeking
-                    let closestFood = null;
-                    let minFoodDist = Infinity;
-                    state.food.forEach((f) => {
-                        const d = dist(enemy, f);
-                        if (d < minFoodDist && d < 600) { minFoodDist = d; closestFood = f; }
-                    });
-                    if(closestFood) {
-                        finalX += (closestFood.x - enemy.x);
-                        finalY += (closestFood.y - enemy.y);
-                    } else {
-                        // Wander
-                        finalX += Math.cos(enemy.angle) * 100;
-                        finalY += Math.sin(enemy.angle) * 100;
+                // Avoid Other AIs
+                state.enemies.forEach(other => {
+                    if(other !== enemy && other.alive) {
+                        // Avoid Heads (General spacing)
+                        const d = dist(enemy, other);
+                        if(d < detectionRange) {
+                            const push = 5000 / (d + 1);
+                            finalX -= (other.x - enemy.x) * push;
+                            finalY -= (other.y - enemy.y) * push;
+                        }
+                        // Avoid Bodies
+                        for (let i = 0; i < other.body.length; i += 4) {
+                            const b = other.body[i];
+                            const bd = dist(enemy, b);
+                            if (bd < detectionRange) {
+                                const push = 8000 / (bd + 1);
+                                finalX -= (b.x - enemy.x) * push;
+                                finalY -= (b.y - enemy.y) * push;
+                            }
+                        }
                     }
-                }
+                });
 
-                // B. AVOIDANCE (Walls) - Smooth
-                const wallMargin = WORLD_SIZE/2 - 200;
-                if (enemy.x > wallMargin) finalX -= (enemy.x - wallMargin) * 5;
-                if (enemy.x < -wallMargin) finalX += (-wallMargin - enemy.x) * 5;
-                if (enemy.y > wallMargin) finalY -= (enemy.y - wallMargin) * 5;
-                if (enemy.y < -wallMargin) finalY += (-wallMargin - enemy.y) * 5;
-
-                // C. AVOIDANCE (Mines - Active & Idle)
+                // Avoid Mines
                 state.mines.forEach(m => {
                     const d = dist(enemy, m);
-                    if(d < 300) {
-                        // Strong push away
-                        const push = 5000 / (d + 1);
-                        finalX -= (m.x - enemy.x) / d * push;
-                        finalY -= (m.y - enemy.y) / d * push;
-                        // Panic if triggered
+                    if(d < detectionRange + 100) {
+                        const push = 12000 / (d + 1);
+                        finalX -= (m.x - enemy.x) * push;
+                        finalY -= (m.y - enemy.y) * push;
                         if(m.state === 'triggered') forceSprint = true;
                     }
                 });
 
-                // D. COLLISION AVOIDANCE (Bodies)
-                // Avoid Player Body
-                state.players.forEach(p => {
-                    if(!p.dead) {
-                        p.body.forEach((b, i) => {
-                            if(i%3===0) {
-                                const d = dist(enemy, b);
-                                if(d < 150) {
-                                    const push = 8000 / (d+1);
-                                    finalX -= (b.x - enemy.x) / d * push;
-                                    finalY -= (b.y - enemy.y) / d * push;
-                                }
-                            }
+                // C. TARGETING (Food or Kill)
+                // If we are currently avoiding a wall or threat (vector is huge), ignore food
+                const isEvading = (Math.abs(finalX) > 2000 || Math.abs(finalY) > 2000);
+
+                if (!isEvading) {
+                    let targetPlayer = null;
+                    let distToPlayer = Infinity;
+                    
+                    state.players.forEach((p) => {
+                        if (!p.dead && p.active) {
+                            const d = dist(enemy, p);
+                            if(d < distToPlayer) { distToPlayer = d; targetPlayer = p; }
+                        }
+                    });
+
+                    // KAMIKAZE (Croatia) BEHAVIOR
+                    if (enemy.country === 'croatia' && targetPlayer) {
+                        const dx = targetPlayer.x - enemy.x;
+                        const dy = targetPlayer.y - enemy.y;
+                        
+                        // Prediction: Aim slightly ahead of player
+                        const leadX = dx + Math.cos(targetPlayer.angle) * distToPlayer * 0.3;
+                        const leadY = dy + Math.sin(targetPlayer.angle) * distToPlayer * 0.3;
+
+                        finalX += leadX * 8.0; // High weight
+                        finalY += leadY * 8.0;
+                        forceSprint = true;
+                    } 
+                    // NORMAL BEHAVIOR
+                    else if (targetPlayer && distToPlayer < AGGRO_RADIUS && enemy.width > targetPlayer.scale) {
+                        // Bully smaller players
+                        finalX += (targetPlayer.x - enemy.x) * 2.0;
+                        finalY += (targetPlayer.y - enemy.y) * 2.0;
+                        if(Math.random() < 0.1) forceSprint = true;
+                    } 
+                    else {
+                        // Seek Food
+                        let closestFood = null;
+                        let minFoodDist = Infinity;
+                        // Optimization: Don't scan all food every frame, scan a subset or radius
+                        state.food.forEach((f) => {
+                            // Big snakes ignore tiny food far away
+                            if (f.level < 2 && enemy.width > 50) return;
+                            
+                            const d = dist(enemy, f);
+                            if (d < minFoodDist && d < 800) { minFoodDist = d; closestFood = f; }
                         });
+                        
+                        if(closestFood) {
+                            finalX += (closestFood.x - enemy.x) * 1.5;
+                            finalY += (closestFood.y - enemy.y) * 1.5;
+                        } else {
+                            // Wander momentum
+                            finalX += Math.cos(enemy.angle) * 200;
+                            finalY += Math.sin(enemy.angle) * 200;
+                        }
                     }
-                });
-                
-                // Avoid Other AI Bodies
-                state.enemies.forEach(other => {
-                    if(other !== enemy && other.alive) {
-                        other.body.forEach((b, i) => {
-                            if(i%5===0) {
-                                const d = dist(enemy, b);
-                                if(d < 100) {
-                                    const push = 4000 / (d+1);
-                                    finalX -= (b.x - enemy.x) / d * push;
-                                    finalY -= (b.y - enemy.y) / d * push;
-                                }
-                            }
-                        });
-                    }
-                });
+                }
 
                 // --- 3. APPLY MOVEMENT ---
                 const targetAngle = Math.atan2(finalY, finalX);
                 
                 let diff = normalizeAngle(targetAngle - enemy.angle);
-                const turn = (forceSprint ? enemy.turnSpeed * 1.5 : enemy.turnSpeed) * aiTurnMult;
+                // Turn speed scaling: Big snakes turn slower
+                let dynamicTurnSpeed = enemy.turnSpeed;
+                if (enemy.width > 30) dynamicTurnSpeed *= 0.8; 
+                if (enemy.width > 60) dynamicTurnSpeed *= 0.6;
+                
+                // Aggro snakes keep high agility
+                if (forceSprint) dynamicTurnSpeed *= 1.5;
+
+                const turn = dynamicTurnSpeed * aiTurnMult;
 
                 if (Math.abs(diff) < turn) enemy.angle = targetAngle;
                 else if (diff > 0) enemy.angle += turn;
                 else enemy.angle -= turn;
                 enemy.angle = normalizeAngle(enemy.angle);
 
-                const spd = (forceSprint && enemy.length > 145 ? enemy.boostSpeed : enemy.speed) * aiSpeedMult;
-                if (forceSprint && enemy.length > 145) enemy.length -= 0.3;
+                // Speed Logic
+                let currentSpeed = enemy.speed;
+                if (forceSprint && enemy.length > 145) {
+                    currentSpeed = enemy.boostSpeed;
+                    // Aggro snakes lose length slower so they can chase longer
+                    const cost = enemy.country === 'croatia' ? 0.1 : 0.3;
+                    enemy.length -= cost;
+                }
+                
+                const spd = currentSpeed * aiSpeedMult;
 
                 enemy.x += Math.cos(enemy.angle) * spd;
                 enemy.y += Math.sin(enemy.angle) * spd;
                 
-                // HARD BORDER KILL
+                // FINAL SAFETY CHECK: Hard Border Kill
                 if(Math.abs(enemy.x) > WORLD_SIZE/2 || Math.abs(enemy.y) > WORLD_SIZE/2) {
                     killEnemy(enemy, null);
                     return;
                 }
 
+                // Body Management
                 enemy.body.unshift({ x: enemy.x, y: enemy.y });
                 while (enemy.body.length > enemy.length) enemy.body.pop();
 
-                // Eat
+                // Eat Food
                 for (let i = state.food.length - 1; i >= 0; i--) {
                     if (coll(enemy, state.food[i], enemy.width + 10)) {
                         state.food.splice(i, 1);
-                        enemy.length += 5; // Reduced Length Gain (Nerf)
+                        enemy.length += 5; 
+                        enemy.baseScale = Math.min(200, enemy.baseScale + 0.15); // Grow
                     }
                 }
 
@@ -1468,18 +1474,20 @@
                 state.enemies.forEach(other => {
                     if(other !== enemy && other.alive) {
                         for(let b of other.body) {
-                            if(coll(enemy, b, enemy.width + other.width)) {
+                            if(coll(enemy, b, enemy.width + other.width - 5)) {
                                 killEnemy(enemy, other);
                             }
                         }
                     }
                 });
 
-                // Player Collision check (AI dies if it hits player body)
+                // Player Collision
                 state.players.forEach((p) => {
                     if (!p.dead && p.active) {
+                        // AI hits Player
                         if (coll(p, enemy, p.scale + enemy.width)) killPlayer(p, null);
-                        // Check if Player hits AI body
+                        
+                        // Player hits AI body
                          for (let j = 0; j < p.body.length; j += 2)
                             if (coll(enemy, p.body[j], enemy.width + p.scale)) killEnemy(enemy, p);
                     }
@@ -1536,56 +1544,15 @@
                 let m = s.mines[i];
                 if (m.state === "idle") {
                     let triggered = false;
-                    let triggerer = null;
-
-                    activeEntities.forEach((p) => { 
-                        // FEATURE: You can't activate your own converted mines (Bosnian Kingdom immunity to triggering)
-                        // If I am Bosnian Kingdom, and this is a Bosnian Mine (converted by me), I don't trigger it.
-                        if (m.isBosnian && p.country === "bosnian_kingdom") return;
-
-                        if (!p.dead && dist(p, m) < 200) { 
-                            triggered = true; 
-                            triggerer = p;
-                        } 
-                    });
-
-                    if (triggered) { 
-                        m.state = "triggered"; 
-                        m.lastTick = now; 
-                        
-                        // Increment Counter for Unlock (If player triggered it)
-                        if(triggerer && triggerer.id === currentState.myPlayerIndex) {
-                            triggerer.minesTriggered = (triggerer.minesTriggered || 0) + 1;
-                            
-                            // CHECK FOR BOSNIAN KINGDOM UNLOCK
-                            if (triggerer.country === 'bosnia' && 
-                                triggerer.kills >= 30 && 
-                                triggerer.length >= 210 && 
-                                triggerer.minesTriggered >= 100) {
-                                    updateStats({ unlockSecret: 'bosnian_kingdom' });
-                            }
-                        }
-
-                        // Bosnian Mine Instant Logic
-                        if (m.isBosnian) {
-                             m.timer = 0; // Explode immediately
-                        }
-                    }
+                    activeEntities.forEach((p) => { if (!p.dead && dist(p, m) < 200) triggered = true; });
+                    if (triggered) { m.state = "triggered"; m.lastTick = now; }
                 } else if (m.state === "triggered") {
-                    // Logic for explosion timer
-                    const delay = m.isBosnian ? 0 : m.timer * 1000;
-
-                    if (now - m.lastTick >= delay) {
+                    if (now - m.lastTick > m.timer * 1000) {
                         createExplosion(m.x, m.y);
-                        activeEntities.forEach((p) => { 
-                            if (!p.dead && dist(p, m) < 300) {
-                                // IMMUNITY: Bosnian Kingdom player is immune to Bosnian Mines DAMAGE as well
-                                if (m.isBosnian && p.country === "bosnian_kingdom") return;
-
-                                if(p.id !== undefined) killPlayer(p, null); // Player
-                                else killEnemy(p, null); // Bot
-                            }
-                        });
+                        activeEntities.forEach((p) => { if (!p.dead && dist(p, m) < 300) {
+                            if(p.id !== undefined) killPlayer(p, null); // Player
+                            else killEnemy(p, null); // Bot
+                        }});
                         s.mines.splice(i, 1);
                     }
                 }
@@ -1659,7 +1626,7 @@
                 mode: state.mode,
                 shakeIntensity: Math.round(state.shakeIntensity),
                 food: state.food.map((f) => ({ x: Math.round(f.x), y: Math.round(f.y), l: f.level, g: f.isGolden ? 1 : 0 })),
-                mines: state.mines.map((m) => ({ x: Math.round(m.x), y: Math.round(m.y), state: m.state, isBosnian: m.isBosnian })),
+                mines: state.mines.map((m) => ({ x: Math.round(m.x), y: Math.round(m.y), state: m.state })),
                 explosions: state.explosions.map((e) => ({
                     x: Math.round(e.x), y: Math.round(e.y), radius: Math.round(e.radius), alpha: Number(e.alpha.toFixed(2))
                 })),
@@ -1758,17 +1725,16 @@
             if(!currentState.isSpectating) {
                 document.getElementById('hud-size').innerText = "Size: " + (me.scale || 18).toFixed(1);
                 document.getElementById('hud-kills').innerText = "Kills: " + (me.kills || 0);
-                document.getElementById('hud-mines').innerText = "Mines: " + (me.minesTriggered || 0);
             }
 
             // Ability HUD
             const abInd = document.getElementById('ability-indicator');
             const abTxt = document.getElementById('ability-text');
-            if(me.country === 'soviet' || me.country === 'golden_maple' || me.country === 'bosnian_kingdom') {
+            if(me.country === 'soviet' || me.country === 'golden_maple') {
                 abInd.style.display = 'flex';
-                const cooldown = (me.country === 'bosnian_kingdom') ? 30000 : 60000;
+                const cooldown = 60000;
                 const timeSince = Date.now() - (me.lastAbilityTime || 0);
-                const isActive = me.barrageActive || !!me.maplePhase || (me.abilityActive && me.country === 'bosnian_kingdom');
+                const isActive = me.barrageActive || !!me.maplePhase;
                 
                 if (isActive) {
                     abTxt.innerText = "ACTIVE";
@@ -1854,38 +1820,21 @@
 
             // Mines
             gameData.mines.forEach((m) => {
-                const r = 25; const d = r * 2;
-                
-                // Triggered Warning
                 if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) {
-                    ctx.fillStyle = m.isBosnian ? "rgba(0, 47, 108, 0.3)" : "rgba(255,0,0,0.3)"; 
-                    ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = "rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, Math.PI * 2); ctx.fill();
                 }
-
+                const r = 25; const d = r * 2;
                 ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.clip();
-                
-                // MINE ART
-                if (m.isBosnian) {
-                    // Bosnian Kingdom Mine (Royal Blue + Gold)
-                    ctx.fillStyle = "#002395"; ctx.fillRect(m.x - r, m.y - r, d, d);
-                    ctx.strokeStyle = "#FFD700"; ctx.lineWidth = 4; 
-                    // Diagonal Cross
-                    ctx.beginPath(); ctx.moveTo(m.x - r, m.y - r); ctx.lineTo(m.x + r, m.y + r); ctx.stroke();
-                    ctx.beginPath(); ctx.moveTo(m.x + r, m.y - r); ctx.lineTo(m.x - r, m.y + r); ctx.stroke();
-                } else {
-                    // Standard Mine (Detailed Flag Style)
-                    ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3);
-                    ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3);
-                    ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3);
-                    // Skull/Cross
-                    ctx.fillStyle = "white"; ctx.beginPath();
-                    ctx.moveTo(m.x - 10, m.y - 10); ctx.lineTo(m.x, m.y - 10); ctx.lineTo(m.x, m.y + 5);
-                    ctx.lineTo(m.x - 5, m.y + 12); ctx.lineTo(m.x - 10, m.y + 5); ctx.fill();
-                }
-                
+                // Mine Art (Detailed Flag Style)
+                ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3);
+                ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3);
+                ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3);
+                // Skull/Cross
+                ctx.fillStyle = "white"; ctx.beginPath();
+                ctx.moveTo(m.x - 10, m.y - 10); ctx.lineTo(m.x, m.y - 10); ctx.lineTo(m.x, m.y + 5);
+                ctx.lineTo(m.x - 5, m.y + 12); ctx.lineTo(m.x - 10, m.y + 5); ctx.fill();
                 ctx.restore();
-                ctx.strokeStyle = m.state === "triggered" ? (m.isBosnian ? "#00FFFF" : "red") : "#333"; 
-                ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.stroke();
+                ctx.strokeStyle = m.state === "triggered" ? "red" : "#333"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.stroke();
             });
 
             // Render Entities (Players + Bots)
@@ -1896,11 +1845,6 @@
                 // Effects
                 if (p.frozenUntil && Date.now() < p.frozenUntil) { ctx.shadowBlur = 15; ctx.shadowColor = "cyan"; }
                 else if (p.country === "soviet" && p.abilityActive) { ctx.shadowBlur = 30; ctx.shadowColor = "#FF0000"; }
-                else if (p.country === "bosnian_kingdom" && p.abilityActive) { 
-                    // Kingdom Aura
-                    ctx.shadowBlur = 30; ctx.shadowColor = "#002395"; 
-                    ctx.strokeStyle = "rgba(255, 215, 0, 0.4)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y, 2.5 * CELL, 0, Math.PI * 2); ctx.stroke();
-                }
                 else if (p.country === "golden_maple" && p.maplePhase === "harvest") {
                     ctx.shadowBlur = 40; ctx.shadowColor = "#DAA520";
                     ctx.strokeStyle = "rgba(218, 165, 32, 0.4)"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(p.x, p.y, 5 * CELL, 0, Math.PI * 2); ctx.stroke();
@@ -1960,23 +1904,6 @@
                 ctx.fillStyle = "#FECB00"; ctx.beginPath(); ctx.moveTo(r * 0.2, -r); ctx.lineTo(r * 0.2, r); ctx.lineTo(r, -r * 0.5); ctx.fill();
                 ctx.fillStyle = "white";
                 for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.6 + i * r * 0.4, r * 0.1, 0, Math.PI * 2); ctx.fill(); }
-            }
-            else if (country === 'bosnian_kingdom') {
-                // Royal Blue Background
-                rect(-r, -r, r * 2, r * 2, "#002395");
-                // White Diagonal Band
-                ctx.fillStyle = "white"; 
-                ctx.beginPath(); 
-                ctx.moveTo(-r, -r*0.5); ctx.lineTo(-r, -r); ctx.lineTo(r, r*0.5); ctx.lineTo(r, r); 
-                ctx.fill();
-                // Gold Fleurs-de-lis (approximated as diamonds for canvas performance)
-                ctx.fillStyle = "#FFD700";
-                const drawLily = (ox, oy) => {
-                    ctx.beginPath(); ctx.moveTo(ox, oy-r*0.2); ctx.lineTo(ox+r*0.15, oy); ctx.lineTo(ox, oy+r*0.2); ctx.lineTo(ox-r*0.15, oy); ctx.fill();
-                };
-                drawLily(-r*0.4, -r*0.4);
-                drawLily(r*0.4, r*0.4);
-                drawLily(0, 0);
             }
             else if (country === 'russia') {
                 rect(-r, -r, r * 2, (r * 2) / 3, "white");
