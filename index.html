@@ -1,10 +1,10 @@
-```html
+``html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: Kingdom Update</title>
+    <title>Bosnia Snake: Kingdom Update (Admin Server Edition)</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -71,16 +71,6 @@
             font-size: 16px; 
             color: #FECB00; 
             text-shadow: 1px 1px 2px black;
-        }
-        
-        #hud-ping {
-            position: absolute;
-            top: 85px;
-            left: 20px;
-            font-size: 10px;
-            color: lime;
-            display: none;
-            text-shadow: 1px 1px 1px black;
         }
 
         /* --- ABILITY INDICATOR (For Special Skins) --- */
@@ -236,11 +226,6 @@
             transform: translateY(2px);
             box-shadow: 0 2px 0 rgba(0,0,0,0.3);
         }
-        
-        .btn-host {
-            background: linear-gradient(to right, #006400, #008000);
-            box-shadow: 0 0 10px #00FF00;
-        }
 
         .btn-redeem {
             width: 100%;
@@ -377,6 +362,11 @@
         }
         .spectate-row:hover { background: #333; }
         
+        .server-official {
+            border: 1px solid #FECB00;
+            background: rgba(254, 203, 0, 0.1);
+        }
+
         /* --- DEATH SCREEN --- */
         #death-screen {
             position: absolute;
@@ -404,20 +394,23 @@
         /* --- OWNER / CHEAT PANELS --- */
         #owner-login-panel {
             position: absolute;
-            top: 10px;
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%);
-            background: black;
-            padding: 15px;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 30px;
             border: 2px solid red;
             z-index: 999;
             display: none;
+            width: 300px;
+            box-shadow: 0 0 50px red;
+            text-align: center;
         }
         #owner-control-panel {
             position: absolute;
             top: 60px;
             left: 10px;
-            width: 150px;
+            width: 180px;
             background: rgba(0,0,0,0.85);
             padding: 15px;
             border: 2px solid red;
@@ -429,12 +422,14 @@
         .cheat-btn {
             display: block;
             width: 100%;
-            padding: 8px;
-            margin-bottom: 5px;
+            padding: 10px;
+            margin-bottom: 8px;
             background: #330000;
             color: red;
             border: 1px solid red;
             font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
         }
         .cheat-btn:hover {
             background: red;
@@ -447,6 +442,22 @@
             margin-top: 10px;
             font-size: 12px;
             height: 20px;
+        }
+
+        #btn-admin-open {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            font-size: 10px;
+            padding: 5px 10px;
+            background: #333;
+            color: #555;
+            border: 1px solid #444;
+            cursor: pointer;
+        }
+        #btn-admin-open:hover {
+            color: red;
+            border-color: red;
         }
 
         /* Scrollbar styling */
@@ -467,7 +478,6 @@
             <div id="hud-size">Size: 18.0</div>
             <div id="hud-kills">Kills: 0</div>
         </div>
-        <div id="hud-ping">Ping: 0ms</div>
 
         <!-- ABILITY HUD -->
         <div id="ability-indicator">
@@ -490,7 +500,7 @@
                 <div class="row"><span>MAX LENGTH</span><span id="stat-length" style="color: #FECB00">140</span></div>
                 
                 <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid #333;">
-                    <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">SECRET / ADMIN CODE</div>
+                    <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">SECRET CODE</div>
                     <input type="text" id="redeem-input" style="font-size: 12px; padding: 10px; margin-bottom: 8px;" placeholder="Enter Code...">
                     <button id="btn-redeem" class="btn-redeem">REDEEM CODE</button>
                 </div>
@@ -521,12 +531,15 @@
                 <!-- Spectate List -->
                 <div style="margin-top: 20px; border-top: 1px solid #333; padding-top: 15px;">
                     <div style="color: #FECB00; font-weight: bold; margin-bottom: 10px; font-size: 14px;">
-                        PUBLIC SERVERS <span id="scan-status" style="font-size: 10px; color: #666; font-weight: normal;">(Scanning...)</span>
+                        LIVE GAMES <span id="scan-status" style="font-size: 10px; color: #666; font-weight: normal;">(Scanning...)</span>
                     </div>
                     <div id="spectate-list">
                         <div style="color: #666; font-size: 12px; font-style: italic; padding: 10px;">Initializing scanner...</div>
                     </div>
                 </div>
+                
+                <!-- Admin Button -->
+                <button id="btn-admin-open">ADMIN LOGIN</button>
             </div>
 
             <!-- Leaderboard -->
@@ -547,18 +560,26 @@
         <!-- Death Screen -->
         <div id="death-screen">
             <div class="death-title">YOU DIED</div>
-            <div class="death-sub">Press 'R' to Respawn</div>
+            <div class="death-sub">Press 'R' to Restart</div>
         </div>
 
         <!-- OWNER / CHEAT PANELS -->
         <div id="owner-login-panel">
-            <div style="color:red; font-size:12px; margin-bottom:5px;">OWNER ACCESS</div>
-            <input type="password" id="owner-password" placeholder="Password">
-            <button id="btn-owner-login" style="width:100%; background:red; color:white; padding:5px;">LOGIN</button>
+            <div style="color:red; font-size:20px; font-weight:900; margin-bottom:15px; border-bottom:1px solid red; padding-bottom:10px;">ADMIN LOGIN</div>
+            <input type="password" id="owner-password" placeholder="ENTER PASSWORD">
+            <div style="display:flex; gap:10px;">
+                <button id="btn-owner-close" style="width:50%; background:#222; color:#888; padding:10px;">CANCEL</button>
+                <button id="btn-owner-login" style="width:50%; background:red; color:white; padding:10px;">LOGIN</button>
+            </div>
         </div>
 
         <div id="owner-control-panel">
-            <div style="text-align:center; margin-bottom:10px; border-bottom:1px solid red;">CHEATS</div>
+            <div style="text-align:center; margin-bottom:10px; border-bottom:1px solid red;">ADMIN CONTROLS</div>
+            
+            <button class="cheat-btn" id="cheat-host-server" style="background: gold; color: black; border-color: white;">HOST OFFICIAL SERVER</button>
+            
+            <div style="border-top: 1px solid #555; margin: 5px 0;"></div>
+            
             <button class="cheat-btn" id="cheat-god">God Mode: OFF</button>
             <button class="cheat-btn" id="cheat-speed">Speed Hack: OFF</button>
             <button class="cheat-btn" id="cheat-size">Set Size 50</button>
@@ -635,7 +656,6 @@
         // GAME CONFIGURATION CONSTANTS
         // -------------------------------------------------------------------------
         const OWNER_PASSWORD = "Roblox13_isme";
-        const ADMIN_HOST_CODE = "ADMIN_SERVER_2025";
         const CELL = 150;
         const GRID = 80;
         const WORLD_SIZE = CELL * GRID;
@@ -645,15 +665,15 @@
         // Tuning
         const BASE_SPEED = 4.2;
         const TURN_SPEED = 0.09;
-        const MAX_ENEMIES = 15; // Increased for Multiplayer Feel
+        const MAX_ENEMIES = 8; // Number of AI
         
         // NERF: SIZE GAIN REDUCED
         const SIZE_GAIN_PER_LEVEL = 0.15; // Was 0.25
         
         const FOOD_RADIUS_BASE = 6;
         const LENGTH_GAIN = 8;
-        const BROADCAST_RATE = 35; // Faster for multiplayer (was 50)
-        const INTERPOLATION_SPEED = 0.3; // Snappier
+        const BROADCAST_RATE = 45; // OPTIMIZED FROM 50ms for smoother ticks (approx 22 TPS)
+        const INTERPOLATION_SPEED = 0.35; // SMOOTHER INTERPOLATION
 
         // Skin Lists
         const SKINS_NORMAL = [
@@ -772,9 +792,8 @@
             selectedSkin: 'bosnia',
             playerName: localStorage.getItem('bosnia_snake_username') || "Player" + Math.floor(Math.random() * 999),
             isHost: false,
-            canHostServer: false, // Unlocked via Admin Code
-            isMultiplayerClient: false,
-            isSpectating: false, // Legacy spectate
+            isSpectating: false,
+            isDedicatedServer: false,
             myId: null,
             myPlayerIndex: 0
         };
@@ -801,11 +820,10 @@
 
         // Networking
         let peer = null;
-        let connections = []; // Host: array of peer connections
+        let connections = []; // Host: array of spectator connections
         let hostConn = null; // Client: connection to host
         let lastSentTime = 0;
         let serverState = null; // For interpolation
-        let netPing = 0;
 
         // Input
         const mouse = { x: 0, y: 0 };
@@ -814,7 +832,7 @@
         // Game World Data (The Engine State)
         let gameData = {
             mode: null,
-            players: [], // All active players (Host is ID 0 or 'host')
+            players: [],
             enemies: [], // Bots
             food: [],
             mines: [],
@@ -851,7 +869,7 @@
         }
 
         function isSkinUnlocked(skin) {
-            // Master Unlock Check
+            // Master Unlock Check (Removed user request, but keeping logic for code stability)
             if (userStats.unlockedSecrets.includes("MASTER_UNLOCK")) return true;
 
             const req = UNLOCK_CRITERIA[skin];
@@ -911,179 +929,183 @@
         // GAME INITIALIZATION (Networking)
         // -------------------------------------------------------------------------
         
-        // --- HOST (Single Player or Server) ---
-        function initHost(isPublicServer = false) {
+        // --- HOST (Single Player) ---
+        function initSinglePlayer() {
             if (peer) peer.destroy();
-            peer = new Peer();
+            peer = new Peer({ debug: 1 }); // Reduce debug noise
 
             peer.on('open', (id) => {
                 currentState.myId = id;
                 currentState.isHost = true;
-                currentState.isMultiplayerClient = false;
+                currentState.isDedicatedServer = false;
                 currentState.isSpectating = false;
-                currentState.myPlayerIndex = 0; // Host is always 0
+                currentState.myPlayerIndex = 0;
                 currentState.menu = 'playing';
 
                 // Publish presence to Firestore
                 if(authReady) {
                     const docRef = doc(db, "active_games", id);
                     const publish = () => setDoc(docRef, { 
-                        host: currentState.playerName + (isPublicServer ? " [SERVER]" : ""), 
-                        isServer: isPublicServer,
-                        lastBeat: serverTimestamp() 
+                        host: currentState.playerName, 
+                        lastBeat: serverTimestamp(),
+                        type: 'public'
                     }).catch(e => console.warn("Presence err", e));
                     
                     publish();
-                    const hb = setInterval(publish, 4000);
+                    const hb = setInterval(publish, 5000);
                     peer.on('disconnected', () => clearInterval(hb));
                 }
 
                 updateStats({ game: true });
 
                 // Initialize Game Objects
-                gameData.mode = isPublicServer ? "server" : "single";
-                gameData.players = [];
-                
-                // Add Host Player
-                spawnPlayer(0, currentState.playerName, currentState.selectedSkin);
+                gameData.mode = "single";
+                gameData.players = [{
+                    id: 0,
+                    active: true,
+                    x: 0,
+                    y: 0,
+                    angle: -Math.PI / 2,
+                    body: [],
+                    length: 140,
+                    dead: false,
+                    country: currentState.selectedSkin,
+                    colorBody: SKIN_BODY_COLORS[currentState.selectedSkin],
+                    scale: 18,
+                    kills: 0,
+                    deaths: 0,
+                    frozenUntil: 0,
+                    abilityActive: false,
+                    lastAbilityTime: 0,
+                    maplePhase: null,
+                    kingdomPhase: null,
+                    minesExplodedCurrentGame: 0,
+                    name: currentState.playerName
+                }];
                 
                 resetWorld(true);
                 toggleUI('playing');
-                addChatMessage("System", isPublicServer ? "Hosting Public Server..." : "Single Player Started.", "lime");
+                addChatMessage("System", "Welcome to Single Player! Room ID: " + id, "lime");
 
-                // Listen for Connections (Clients)
+                // Listen for Spectators
                 peer.on('connection', (conn) => {
                     connections.push(conn);
-                    
                     conn.on('data', (data) => {
-                        // CLIENT HANDSHAKE
-                        if (data.type === "JOIN_REQ") {
-                            // Spawn new player for this connection
-                            spawnPlayer(conn.peer, data.name || "Guest", data.skin || "bosnia");
-                            conn.send({ type: "JOIN_ACK", id: conn.peer });
-                            addChatMessage("System", data.name + " joined the game.", "#0f0");
-                        }
-                        // INPUT HANDLING
-                        else if (data.type === "INPUT") {
-                            const p = gameData.players.find(pl => pl.id === conn.peer);
-                            if (p && !p.dead) {
-                                p.targetAngle = data.angle;
-                                p.sprint = data.sprint;
-                                p.triggerAbility = data.ability;
-                                p.lastInputTime = Date.now();
-                            } else if (p && p.dead && data.respawn) {
-                                // Respawn logic for clients
-                                spawnPlayer(conn.peer, p.name, p.country);
-                            }
-                        }
-                        // CHAT
-                        else if (data.type === "CHAT") {
+                        if (data.type === "CHAT") {
                             const msg = { name: data.name, text: data.text, color: "#aaa" };
                             addChatMessage(msg.name, msg.text, msg.color);
-                            broadcastChat(msg); // Relay to all
+                            broadcastChat(msg);
                             playSound("chat");
                         }
                     });
-                    
                     conn.on('close', () => {
                         connections = connections.filter(c => c !== conn);
-                        const pIdx = gameData.players.findIndex(p => p.id === conn.peer);
-                        if(pIdx !== -1) {
-                            addChatMessage("System", gameData.players[pIdx].name + " left.", "#f00");
-                            gameData.players.splice(pIdx, 1);
-                        }
                     });
                 });
             });
         }
 
-        // --- SPAWN HELPER (HOST SIDE) ---
-        function spawnPlayer(id, name, skin) {
-            // Remove existing if any
-            gameData.players = gameData.players.filter(p => p.id !== id);
-            
-            // If server full, maybe remove a bot?
-            if (gameData.players.length > 20) {
-                 // Logic to deny join could go here, for now we just squeeze them in
-            }
+        // --- ADMIN DEDICATED HOST SERVER ---
+        function initAdminServer() {
+            if (peer) peer.destroy();
+            peer = new Peer({ debug: 1 });
 
-            const newP = {
-                id: id,
-                active: true,
-                x: randPosCell(),
-                y: randPosCell(),
-                angle: Math.random() * Math.PI * 2,
-                body: [],
-                length: 140,
-                dead: false,
-                country: skin,
-                colorBody: SKIN_BODY_COLORS[skin] || "#fff",
-                scale: 18,
-                kills: 0,
-                deaths: 0,
-                frozenUntil: Date.now() + 1000, // Spawn protection
-                abilityActive: false,
-                lastAbilityTime: 0,
-                maplePhase: null,
-                kingdomPhase: null,
-                minesExplodedCurrentGame: 0,
-                name: name,
-                // Input state (for clients)
-                targetAngle: null,
-                sprint: false,
-                triggerAbility: false
-            };
-            gameData.players.push(newP);
+            peer.on('open', (id) => {
+                currentState.myId = id;
+                currentState.isHost = true;
+                currentState.isDedicatedServer = true; // Flag as Server
+                currentState.isSpectating = false;
+                currentState.myPlayerIndex = 0;
+                currentState.menu = 'playing';
+                
+                // Set God Mode for Server Host automatically
+                cheats.godMode = true; 
+                document.getElementById('cheat-god').innerText = "God Mode: ON (SERVER)";
+
+                // Publish presence to Firestore as OFFICIAL
+                if(authReady) {
+                    const docRef = doc(db, "active_games", id);
+                    const publish = () => setDoc(docRef, { 
+                        host: "OFFICIAL SERVER", // Force name
+                        lastBeat: serverTimestamp(),
+                        type: 'official', // Special Tag for Gold text
+                        players: connections.length
+                    }).catch(e => console.warn("Presence err", e));
+                    
+                    publish();
+                    const hb = setInterval(publish, 4000); // Faster heartbeat
+                    peer.on('disconnected', () => clearInterval(hb));
+                }
+
+                // Initialize Game Objects
+                gameData.mode = "server";
+                gameData.players = [{
+                    id: 0,
+                    active: true,
+                    x: 0, y: 0, angle: -Math.PI/2, body: [], length: 500, // Big snake start
+                    dead: false, country: "bosnian_kingdom", colorBody: "#002395",
+                    scale: 40, kills: 0, deaths: 0, frozenUntil: 0,
+                    abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null,
+                    minesExplodedCurrentGame: 0, name: "SERVER ADMIN"
+                }];
+                
+                resetWorld(true);
+                toggleUI('playing');
+                addChatMessage("System", "HOSTING OFFICIAL SERVER. ID: " + id, "gold");
+
+                // Listen for Players/Spectators
+                peer.on('connection', (conn) => {
+                    connections.push(conn);
+                    conn.on('data', (data) => {
+                        if (data.type === "CHAT") {
+                            const msg = { name: data.name, text: data.text, color: "#aaa" };
+                            broadcastChat(msg);
+                        }
+                    });
+                    conn.on('close', () => {
+                        connections = connections.filter(c => c !== conn);
+                    });
+                });
+            });
         }
 
-        // --- CLIENT (Join Game) ---
-        function initJoinGame(idToJoin) {
+        // --- CLIENT (Spectator) ---
+        function initSpectate(idToJoin) {
             if (!idToJoin) return;
             if (peer) peer.destroy();
-            peer = new Peer();
+            peer = new Peer({ debug: 1 });
 
-            peer.on('open', (myPeerId) => {
-                const conn = peer.connect(idToJoin);
+            peer.on('open', () => {
+                // Connect with serialization: json for speed
+                const conn = peer.connect(idToJoin, { serialization: 'json', reliable: true });
                 hostConn = conn;
                 currentState.isHost = false;
-                currentState.isMultiplayerClient = true; // We are a player now!
-                currentState.isSpectating = false;
+                currentState.isSpectating = true;
 
                 conn.on('open', () => {
-                    // Send handshake
-                    conn.send({ 
-                        type: "JOIN_REQ", 
-                        name: currentState.playerName, 
-                        skin: currentState.selectedSkin 
-                    });
-                    
                     currentState.menu = 'playing';
                     toggleUI('playing');
-                    addChatMessage("System", "Joined Server.", "cyan");
+                    addChatMessage("System", "Connected to Server.", "cyan");
                 });
 
                 conn.on('data', (data) => {
-                    if (data.type === "JOIN_ACK") {
-                        currentState.myId = data.id; // Confirm ID
-                    }
-                    else if (data.type === "STATE") {
+                    if (data.type === "STATE") {
                         serverState = data.state;
-                        // Calculate Ping
-                        // (Rough estimation based on update frequency consistency)
-                        
                         // Initial Load
                         if (gameData.players.length === 0 && serverState) {
                             gameData = JSON.parse(JSON.stringify(serverState));
+                            gameData.players.forEach(p => p.body = p.body || []);
+                            gameData.enemies.forEach(e => e.body = e.body || []);
                         }
                     }
-                    else if (data.type === "CHAT_MSG") {
+                    if (data.type === "CHAT_MSG") {
                         addChatMessage(data.msg.name, data.msg.text, data.msg.color);
                         playSound("chat");
                     }
                 });
 
                 conn.on('close', () => {
-                    alert("Disconnected from Server");
+                    alert("Server Disconnected");
                     location.reload();
                 });
             });
@@ -1124,7 +1146,7 @@
                 });
             }
 
-            // Reset All Players
+            // Reset Players
             s.players.forEach((p) => {
                 p.x = randPosCell();
                 p.y = randPosCell();
@@ -1132,9 +1154,23 @@
                 p.length = 140;
                 p.scale = 18;
                 p.dead = false;
-                p.frozenUntil = Date.now() + 1000;
+                p.frozenUntil = 0;
                 p.abilityActive = false;
                 p.lastAbilityTime = 0;
+                p.maplePhase = null;
+                p.kingdomPhase = null;
+                p.minesExplodedCurrentGame = 0;
+                // Soviet Reset
+                p.barrageActive = false;
+                p.barrageStartTime = 0;
+                p.nextExplosionTime = 0;
+                p.sovietBoost = false;
+                
+                // Server Admin Buffs
+                if (currentState.isDedicatedServer && p.id === 0) {
+                    p.scale = 50;
+                    p.length = 500;
+                }
             });
 
             // Enemies
@@ -1144,14 +1180,15 @@
             }
         }
 
+        // --- NEW ENEMY SPAWN LOGIC (Super Fast Kamikaze) ---
         function spawnOneEnemy() {
             const startLen = 140 + Math.random() * 100; 
             const startWidth = 14;
             
-            // CROATIA SPAWN LOGIC: 5% chance if ANY player is > 100 size
-            const bigPlayer = gameData.players.find(p => p.scale > 100);
+            // CROATIA SPAWN LOGIC: 5% chance if player is > 100 size
+            const player = gameData.players[0];
             let isCroatia = false;
-            if (bigPlayer && Math.random() < 0.08) { 
+            if (player && player.scale > 100 && Math.random() < 0.08) { 
                 isCroatia = true;
             }
 
@@ -1168,7 +1205,9 @@
                 baseScale: startWidth,
                 // SPEED BUFFS
                 speed: (2.5 + Math.random()) * 1.1,
+                // Kamikaze is now MUCH faster (was 7.5, now 16.0)
                 boostSpeed: isCroatia ? 16.0 : 8.5, 
+                // Kamikaze turns slightly tighter to handle high speed
                 turnSpeed: isCroatia ? 0.12 : 0.08, 
                 alive: true,
                 color: isCroatia ? "#CC0000" : "#C6363C", 
@@ -1179,10 +1218,11 @@
         }
 
         function getLocalInput() {
-            // For both Host (Player 0) and Client
+            if (currentState.isSpectating) return { targetAngle: null, sprint: false, triggerAbility: false, respawn: false };
+
             const sprint = keys['shift'] || keys['/'];
             const triggerAbility = keys['e'];
-            const respawn = keys['r'];
+            const respawn = keys[' '];
 
             let targetAngle = null;
             if (currentState.controlMode === 'mouse') {
@@ -1202,38 +1242,25 @@
 
         // --- MAIN UPDATE LOOP (HOST) ---
         function updateHostLogic() {
-            const inpHost = getLocalInput();
-            
-            // Apply Host Input
-            const hostP = gameData.players.find(p => p.id === 0);
-            if (hostP) {
-                if (hostP.dead) {
-                    if (inpHost.respawn) spawnPlayer(0, currentState.playerName, currentState.selectedSkin);
-                } else {
-                    hostP.targetAngle = inpHost.targetAngle;
-                    hostP.sprint = inpHost.sprint;
-                    hostP.triggerAbility = inpHost.triggerAbility;
-                }
-            }
+            const p = gameData.players[0];
+            const inp = getLocalInput();
 
-            // Iterate All Players
-            gameData.players.forEach(p => {
-                if(p.dead) return;
-                // Use stored inputs (from network or local)
-                handlePhysics(p, { 
-                    targetAngle: p.targetAngle, 
-                    sprint: p.sprint, 
-                    triggerAbility: p.triggerAbility 
-                });
-            });
+            if (p && p.dead) {
+                if (keys['r']) {
+                     resetWorld(true);
+                     toggleUI('playing');
+                }
+                return;
+            }
 
             // Spawn/Prune Bots
             gameData.enemies = gameData.enemies.filter(e => e.alive);
-            const targetCount = currentState.canHostServer ? MAX_ENEMIES + 5 : MAX_ENEMIES;
-            if (gameData.enemies.length < targetCount && Math.random() < 0.02) spawnOneEnemy();
+            if (gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.02) spawnOneEnemy();
 
+            // Logic
+            if (p) handlePhysics(p, inp);
             updateAI(); 
-            updateEnvironment([...gameData.players, ...gameData.enemies]);
+            if (p) updateEnvironment([p, ...gameData.enemies]);
         }
 
         // --- PHYSICS & ABILITIES ---
@@ -1241,98 +1268,133 @@
             const now = Date.now();
             if (p.frozenUntil > now) return;
 
-            // CHECK COLLISIONS (Player Hitting AI or Other Players)
-            const allEntities = [...gameData.players, ...gameData.enemies];
-            
-            allEntities.forEach(e => {
-                // Don't collide with self or dead
-                if(e === p || (e.dead || e.alive === false)) return;
-                
-                const eWidth = e.scale || e.width;
-                const pWidth = p.scale;
-
-                // Head to Head
-                if (dist(p, e) < pWidth + eWidth) {
-                    if (pWidth > eWidth * 1.1) {
-                         // I win
-                         if(e.id !== undefined) killPlayer(e, p); else killEnemy(e, p);
-                    } else if (eWidth > pWidth * 1.1) {
-                        // They win
-                        killPlayer(p, e);
-                    } else {
-                        // Draw - bounce or both die? Let's just bounce for now to save frustration
-                        p.x -= Math.cos(p.angle)*20; p.y -= Math.sin(p.angle)*20;
+            // CHECK COLLISIONS (Player Hitting AI)
+            gameData.enemies.forEach(e => {
+                if(e.alive) {
+                    // Head to Head
+                    if (dist(p, e) < p.scale + e.width) {
+                        killPlayer(p, null);
                     }
-                }
-                
-                // Head to Body
-                // Optimization: Don't check every segment
-                const step = Math.max(1, Math.floor(e.body.length / 20));
-                for(let i=0; i<e.body.length; i+=step) {
-                    if(dist(p, e.body[i]) < pWidth + eWidth - 5) {
-                        killPlayer(p, e.id !== undefined ? e : null);
-                        return; // Die once
+                    // Head to Body
+                    for(let i=0; i<e.body.length; i+=3) {
+                        if(dist(p, e.body[i]) < p.scale + e.width - 5) {
+                            killPlayer(p, null);
+                            return; // Die once
+                        }
                     }
                 }
             });
 
-            // ABILITIES (Logic same as before, applied to 'p')
-            // ... [Reuse existing ability logic for p] ...
+            // ABILITIES
+            // 1. SOVIET
             if (p.country === "soviet") {
+                // Trigger
                 if (inp.sprint && !p.barrageActive && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000)) {
-                    p.barrageActive = true; p.barrageEndTime = now + 2000; p.nextExplosionTime = now; p.abilityActive = true;
+                    p.barrageActive = true;
+                    p.barrageEndTime = now + 2000;
+                    p.nextExplosionTime = now;
+                    p.abilityActive = true;
                 }
+                // Active State
                 if (p.barrageActive) {
-                    if (now >= p.barrageEndTime) { p.barrageActive = false; p.abilityActive = false; p.sovietBoost = false; p.lastAbilityTime = now; } 
-                    else {
+                    if (now >= p.barrageEndTime) {
+                        p.barrageActive = false;
+                        p.abilityActive = false;
+                        p.sovietBoost = false;
+                        p.lastAbilityTime = now;
+                    } else {
                         p.sovietBoost = true;
                         if (now >= p.nextExplosionTime) {
                             createExplosion(p.x, p.y, 3 * CELL);
-                            if(p.id === currentState.myPlayerIndex) gameData.shakeIntensity = Math.min(60, gameData.shakeIntensity + 10);
+                            gameData.shakeIntensity = Math.min(60, gameData.shakeIntensity + 10);
                             p.nextExplosionTime = now + 200;
-                            if(p.id === currentState.myPlayerIndex) playSound("soviet_boom");
-                            // Kill nearby enemies logic...
+                            playSound("soviet_boom");
+                            // Kill nearby enemies
+                            gameData.enemies.forEach(e => {
+                                if (e.alive && dist(e, p) < 3 * CELL) killEnemy(e, p);
+                            });
                         }
                     }
                 }
             }
+            // 2. GOLDEN MAPLE
             else if (p.country === "golden_maple") {
                 if (inp.triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000) && !p.maplePhase) {
-                    p.maplePhase = "harvest"; p.phaseEndTime = now + 2500; p.lastAbilityTime = now;
-                    if(p.id === currentState.myPlayerIndex) playSound("angelic");
+                    p.maplePhase = "harvest";
+                    p.phaseEndTime = now + 2500;
+                    p.lastAbilityTime = now;
+                    playSound("angelic");
                 }
                 if (p.maplePhase === "harvest") {
                     if (now > p.phaseEndTime) {
-                        p.maplePhase = "syrup"; p.phaseEndTime = now + 5000;
+                        p.maplePhase = "syrup";
+                        p.phaseEndTime = now + 5000;
                         gameData.syrupZones.push({ x: p.x, y: p.y, radius: 6 * CELL, expiresAt: now + 5000, ownerId: p.id });
                     }
                 } else if (p.maplePhase === "syrup") {
                     if (now > p.phaseEndTime) p.maplePhase = null;
                 }
             }
+            // 3. BOSNIAN KINGDOM ABILITY
             else if (p.country === "bosnian_kingdom") {
                 const cooldown = 30000;
+                // Trigger
                 if (inp.triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > cooldown)) {
-                    p.kingdomPhase = "active"; p.phaseEndTime = now + 1500; p.lastAbilityTime = now;
-                    if(p.id === currentState.myPlayerIndex) playSound("soviet_boom");
+                    p.kingdomPhase = "active";
+                    p.phaseEndTime = now + 1500; // 1.5 Seconds duration
+                    p.lastAbilityTime = now;
+                    playSound("soviet_boom"); // Re-use boom sound for activation
                     
+                    // INSTANT EFFECT: Transmute Radius (2 Tiles = 300 units)
                     const radius = 300;
-                    // Transmute Food/Mines
+                    
+                    // 1. Convert Food -> Mines
                     for (let i = gameData.food.length - 1; i >= 0; i--) {
                         if (dist(p, gameData.food[i]) < radius) {
+                            // Remove food
                             gameData.food.splice(i, 1);
-                            gameData.mines.push({ x: p.x + (Math.random()-0.5)*50, y: p.y + (Math.random()-0.5)*50, state: "idle", type: "bosnian", ownerId: p.id, timer: 0.5, lastTick: now });
+                            // Add Mine
+                            gameData.mines.push({
+                                x: p.x + (Math.random()-0.5)*50, // Slight jitter
+                                y: p.y + (Math.random()-0.5)*50,
+                                state: "idle",
+                                type: "bosnian", // Special Type
+                                ownerId: p.id,   // Owner Immunity
+                                timer: 0.5,      // Fast trigger
+                                lastTick: now
+                            });
                         }
                     }
+
+                    // 2. Convert Enemy Mines -> Your Mines
                     gameData.mines.forEach(m => {
-                        if (dist(p, m) < radius && m.type !== "bosnian") { m.type = "bosnian"; m.ownerId = p.id; m.state = "idle"; }
+                        if (dist(p, m) < radius && m.type !== "bosnian") {
+                            m.type = "bosnian";
+                            m.ownerId = p.id;
+                            m.state = "idle"; // Reset state so it doesn't blow up immediately if we are on it
+                        }
                     });
+
+                    // 3. Spawn Protective Ring (8 Mines)
                     for(let i=0; i<8; i++) {
                         const angle = (i / 8) * Math.PI * 2;
-                        gameData.mines.push({ x: p.x + Math.cos(angle) * 250, y: p.y + Math.sin(angle) * 250, state: "idle", type: "bosnian", ownerId: p.id, timer: 0.5, lastTick: now });
+                        const mx = p.x + Math.cos(angle) * 250; // Slightly inside the 300 radius
+                        const my = p.y + Math.sin(angle) * 250;
+                        gameData.mines.push({
+                            x: mx, y: my,
+                            state: "idle",
+                            type: "bosnian",
+                            ownerId: p.id,
+                            timer: 0.5,
+                            lastTick: now
+                        });
                     }
                 }
-                if (p.kingdomPhase === "active" && now > p.phaseEndTime) p.kingdomPhase = null;
+                
+                // End Phase
+                if (p.kingdomPhase === "active" && now > p.phaseEndTime) {
+                    p.kingdomPhase = null;
+                }
             }
 
 
@@ -1342,7 +1404,10 @@
 
             // Syrup Slowdown
             gameData.syrupZones.forEach(zone => {
-                if (dist(p, zone) < zone.radius && zone.ownerId !== p.id) { speedMult = 0.4; turnMult = 0.33; }
+                if (dist(p, zone) < zone.radius && zone.ownerId !== p.id) {
+                    speedMult = 0.4;
+                    turnMult = 0.33;
+                }
             });
 
             // Turning
@@ -1356,7 +1421,7 @@
 
             // Speed
             let s = BASE_SPEED * speedMult;
-            if (p.id === 0 && cheats.speedHack) s = BASE_SPEED * 3; // Only host gets cheats
+            if (p.id === currentState.myPlayerIndex && cheats.speedHack) s = BASE_SPEED * 3;
 
             const canSprint = inp.sprint && p.length > MIN_LENGTH && (!p.abilityActive || p.country === "soviet");
             if (canSprint) {
@@ -1369,7 +1434,7 @@
             p.x += Math.cos(p.angle) * s;
             p.y += Math.sin(p.angle) * s;
 
-            // Bounds
+            // World Bounds Death
             if (Math.abs(p.x) > WORLD_SIZE / 2 || Math.abs(p.y) > WORLD_SIZE / 2) {
                 killPlayer(p, null);
             }
@@ -1379,179 +1444,346 @@
             while (p.body.length > p.length) p.body.pop();
         }
 
-        // --- INTELLIGENT AI (Avoids ALL players) ---
+        // --- NEW INTELLIGENT AI (Anti-Loop, Smart Avoidance, Aggro) ---
         function updateAI() {
             const state = gameData;
             const now = Date.now();
-            const AGGRO_RADIUS = 900;
+            const AGGRO_RADIUS = 900; // Increased view range
 
             state.enemies.forEach((enemy) => {
-                if (!enemy.alive || (enemy.frozenUntil && now < enemy.frozenUntil)) return;
+                if (!enemy.alive) return;
+                if (enemy.frozenUntil && now < enemy.frozenUntil) return;
 
+                // --- 1. GROW CHUNKY ---
                 if (!enemy.baseScale) enemy.baseScale = 12;
+                // Cap width logic slightly differently so they don't get too fat to move
                 const currentCalculatedWidth = 12 + Math.min(60, (enemy.length - 140) / 4); 
                 if (currentCalculatedWidth > enemy.baseScale) enemy.baseScale = currentCalculatedWidth;
                 enemy.width = enemy.baseScale;
 
-                let aiSpeedMult = 1.0; let aiTurnMult = 1.0;
-                state.syrupZones.forEach((zone) => { if (dist(enemy, zone) < zone.radius) { aiSpeedMult = 0.4; aiTurnMult = 0.33; } });
+                // Syrup Effect
+                let aiSpeedMult = 1.0;
+                let aiTurnMult = 1.0;
+                state.syrupZones.forEach((zone) => {
+                    if (dist(enemy, zone) < zone.radius) { aiSpeedMult = 0.4; aiTurnMult = 0.33; }
+                });
 
-                let finalX = 0, finalY = 0, forceSprint = false;
+                // --- 2. VECTOR CALCULATION ---
+                let finalX = 0;
+                let finalY = 0;
+                let forceSprint = false;
 
-                // Wall Avoid
+                // A. WALL AVOIDANCE (The Anti-Loop Fix)
+                // Instead of sliding, we pull them towards the center (0,0) if they get too close to edge
                 const distFromCenter = dist(enemy, {x:0, y:0});
-                if (distFromCenter > (WORLD_SIZE / 2) - 300) {
-                    const pullStrength = ((distFromCenter - ((WORLD_SIZE/2) - 300)) / 300) * 5000;
-                    finalX -= enemy.x * pullStrength; finalY -= enemy.y * pullStrength;
+                const mapEdge = WORLD_SIZE / 2;
+                const safetyMargin = 300; // Start turning back 300 units before wall
+
+                if (distFromCenter > mapEdge - safetyMargin) {
+                    // Strong vector pointing exactly at the center of the map
+                    // The closer to the wall, the stronger the pull
+                    const panicFactor = (distFromCenter - (mapEdge - safetyMargin)) / safetyMargin; // 0 to 1
+                    const pullStrength = panicFactor * 5000; // Massive force
+                    
+                    finalX -= enemy.x * pullStrength; // -x points to 0
+                    finalY -= enemy.y * pullStrength; // -y points to 0
                 }
 
-                // Entity Avoidance
-                const detectionRange = 200 * Math.max(1, enemy.width / 15);
-                
-                // Avoid ALL Players
+                // B. THREAT AVOIDANCE (Scaling with Size)
+                // The bigger the snake, the further ahead it looks to avoid crashing
+                const mySizeMultiplier = Math.max(1, enemy.width / 15);
+                const detectionRange = 200 * mySizeMultiplier; 
+
+                // Avoid Players
                 state.players.forEach(p => {
                     if(!p.dead) {
+                        // Avoid Head (if they are bigger)
                         if (p.scale > enemy.width) {
                             const d = dist(enemy, p);
                             if (d < detectionRange + p.scale) {
                                 const push = 10000 / (d + 1);
-                                finalX -= (p.x - enemy.x) * push; finalY -= (p.y - enemy.y) * push;
+                                finalX -= (p.x - enemy.x) * push;
+                                finalY -= (p.y - enemy.y) * push;
                             }
                         }
-                        for(let i=0; i < p.body.length; i+=5) {
-                            const b = p.body[i]; const d = dist(enemy, b);
+                        
+                        // Avoid Body
+                        for(let i=0; i < p.body.length; i+=2) {
+                            const b = p.body[i];
+                            const d = dist(enemy, b);
+                            // Big snakes need more room to turn
                             if(d < detectionRange) {
-                                const push = (15000) / (d + 1);
-                                finalX -= (b.x - enemy.x) * push; finalY -= (b.y - enemy.y) * push;
+                                const push = (15000 * mySizeMultiplier) / (d + 1);
+                                finalX -= (b.x - enemy.x) * push;
+                                finalY -= (b.y - enemy.y) * push;
                             }
                         }
                     }
                 });
-                
-                // Avoid Mines & Other AI... (Abbreviated for length constraint, same logic as before)
-                // ... [Standard avoidance logic]
 
-                // Targeting
+                // Avoid Other AIs
+                state.enemies.forEach(other => {
+                    if(other !== enemy && other.alive) {
+                        // Avoid Heads (General spacing)
+                        const d = dist(enemy, other);
+                        if(d < detectionRange) {
+                            const push = 5000 / (d + 1);
+                            finalX -= (other.x - enemy.x) * push;
+                            finalY -= (other.y - enemy.y) * push;
+                        }
+                        // Avoid Bodies
+                        for (let i = 0; i < other.body.length; i += 4) {
+                            const b = other.body[i];
+                            const bd = dist(enemy, b);
+                            if (bd < detectionRange) {
+                                const push = 8000 / (bd + 1);
+                                finalX -= (b.x - enemy.x) * push;
+                                finalY -= (b.y - enemy.y) * push;
+                            }
+                        }
+                    }
+                });
+
+                // Avoid Mines
+                state.mines.forEach(m => {
+                    const d = dist(enemy, m);
+                    if(d < detectionRange + 100) {
+                        const push = 12000 / (d + 1);
+                        finalX -= (m.x - enemy.x) * push;
+                        finalY -= (m.y - enemy.y) * push;
+                        if(m.state === 'triggered') forceSprint = true;
+                    }
+                });
+
+                // C. TARGETING (Food or Kill)
+                // If we are currently avoiding a wall or threat (vector is huge), ignore food
                 const isEvading = (Math.abs(finalX) > 2000 || Math.abs(finalY) > 2000);
+
                 if (!isEvading) {
-                    // Find closest player
-                    let targetPlayer = null, distToPlayer = Infinity;
-                    state.players.forEach(p => {
-                        if(!p.dead) { const d = dist(enemy, p); if(d < distToPlayer) { distToPlayer = d; targetPlayer = p; } }
+                    let targetPlayer = null;
+                    let distToPlayer = Infinity;
+                    
+                    state.players.forEach((p) => {
+                        if (!p.dead && p.active) {
+                            const d = dist(enemy, p);
+                            if(d < distToPlayer) { distToPlayer = d; targetPlayer = p; }
+                        }
                     });
 
-                    // Kamikaze logic
+                    // KAMIKAZE (Croatia) BEHAVIOR
                     if (enemy.country === 'croatia' && targetPlayer) {
-                        const dx = targetPlayer.x - enemy.x; const dy = targetPlayer.y - enemy.y;
+                        const dx = targetPlayer.x - enemy.x;
+                        const dy = targetPlayer.y - enemy.y;
+                        
+                        // Prediction: Aim slightly ahead of player
                         const leadX = dx + Math.cos(targetPlayer.angle) * distToPlayer * 0.3;
                         const leadY = dy + Math.sin(targetPlayer.angle) * distToPlayer * 0.3;
-                        finalX += leadX * 8.0; finalY += leadY * 8.0; forceSprint = true;
+
+                        finalX += leadX * 8.0; // High weight
+                        finalY += leadY * 8.0;
+                        forceSprint = true;
+                    } 
+                    // NORMAL BEHAVIOR
+                    else if (targetPlayer && distToPlayer < AGGRO_RADIUS && enemy.width > targetPlayer.scale) {
+                        // Bully smaller players
+                        finalX += (targetPlayer.x - enemy.x) * 2.0;
+                        finalY += (targetPlayer.y - enemy.y) * 2.0;
+                        if(Math.random() < 0.1) forceSprint = true;
                     } 
                     else {
-                        // Food seeking
-                        let closestFood = null; let minFoodDist = Infinity;
+                        // Seek Food
+                        let closestFood = null;
+                        let minFoodDist = Infinity;
+                        // Optimization: Don't scan all food every frame, scan a subset or radius
                         state.food.forEach((f) => {
+                            // Big snakes ignore tiny food far away
                             if (f.level < 2 && enemy.width > 50) return;
+                            
                             const d = dist(enemy, f);
                             if (d < minFoodDist && d < 800) { minFoodDist = d; closestFood = f; }
                         });
-                        if(closestFood) { finalX += (closestFood.x - enemy.x) * 1.5; finalY += (closestFood.y - enemy.y) * 1.5; } 
-                        else { finalX += Math.cos(enemy.angle) * 200; finalY += Math.sin(enemy.angle) * 200; }
+                        
+                        if(closestFood) {
+                            finalX += (closestFood.x - enemy.x) * 1.5;
+                            finalY += (closestFood.y - enemy.y) * 1.5;
+                        } else {
+                            // Wander momentum
+                            finalX += Math.cos(enemy.angle) * 200;
+                            finalY += Math.sin(enemy.angle) * 200;
+                        }
                     }
                 }
 
-                // Apply
+                // --- 3. APPLY MOVEMENT ---
                 const targetAngle = Math.atan2(finalY, finalX);
+                
                 let diff = normalizeAngle(targetAngle - enemy.angle);
+                // Turn speed scaling: Big snakes turn slower
                 let dynamicTurnSpeed = enemy.turnSpeed;
                 if (enemy.width > 30) dynamicTurnSpeed *= 0.8; 
+                if (enemy.width > 60) dynamicTurnSpeed *= 0.6;
+                
+                // Aggro snakes keep high agility
                 if (forceSprint) dynamicTurnSpeed *= 1.5;
+
                 const turn = dynamicTurnSpeed * aiTurnMult;
+
                 if (Math.abs(diff) < turn) enemy.angle = targetAngle;
-                else enemy.angle += diff > 0 ? turn : -turn;
+                else if (diff > 0) enemy.angle += turn;
+                else enemy.angle -= turn;
                 enemy.angle = normalizeAngle(enemy.angle);
 
+                // Speed Logic
                 let currentSpeed = enemy.speed;
-                if (forceSprint && enemy.length > 145) { currentSpeed = enemy.boostSpeed; enemy.length -= 0.3; }
-                const spd = currentSpeed * aiSpeedMult;
-                enemy.x += Math.cos(enemy.angle) * spd; enemy.y += Math.sin(enemy.angle) * spd;
+                if (forceSprint && enemy.length > 145) {
+                    currentSpeed = enemy.boostSpeed;
+                    // Aggro snakes lose length slower so they can chase longer
+                    const cost = enemy.country === 'croatia' ? 0.1 : 0.3;
+                    enemy.length -= cost;
+                }
                 
-                if(Math.abs(enemy.x) > WORLD_SIZE/2 || Math.abs(enemy.y) > WORLD_SIZE/2) { killEnemy(enemy, null); return; }
+                const spd = currentSpeed * aiSpeedMult;
 
+                enemy.x += Math.cos(enemy.angle) * spd;
+                enemy.y += Math.sin(enemy.angle) * spd;
+                
+                // FINAL SAFETY CHECK: Hard Border Kill
+                if(Math.abs(enemy.x) > WORLD_SIZE/2 || Math.abs(enemy.y) > WORLD_SIZE/2) {
+                    killEnemy(enemy, null);
+                    return;
+                }
+
+                // Body Management
                 enemy.body.unshift({ x: enemy.x, y: enemy.y });
                 while (enemy.body.length > enemy.length) enemy.body.pop();
 
                 // Eat Food
                 for (let i = state.food.length - 1; i >= 0; i--) {
                     if (coll(enemy, state.food[i], enemy.width + 10)) {
-                        state.food.splice(i, 1); enemy.length += 5; enemy.baseScale = Math.min(200, enemy.baseScale + 0.15);
+                        state.food.splice(i, 1);
+                        enemy.length += 5; 
+                        enemy.baseScale = Math.min(200, enemy.baseScale + 0.15); // Grow
                     }
                 }
+
+                // AI-on-AI Collision
+                state.enemies.forEach(other => {
+                    if(other !== enemy && other.alive) {
+                        for(let b of other.body) {
+                            if(coll(enemy, b, enemy.width + other.width - 5)) {
+                                killEnemy(enemy, other);
+                            }
+                        }
+                    }
+                });
+
+                // Player Collision
+                state.players.forEach((p) => {
+                    if (!p.dead && p.active) {
+                        // AI hits Player
+                        if (coll(p, enemy, p.scale + enemy.width)) killPlayer(p, null);
+                        
+                        // Player hits AI body
+                         for (let j = 0; j < p.body.length; j += 2)
+                            if (coll(enemy, p.body[j], enemy.width + p.scale)) killEnemy(enemy, p);
+                    }
+                });
             });
         }
 
-        // --- ENVIRONMENT LOGIC (Shared) ---
+        // --- ENVIRONMENT LOGIC ---
         function updateEnvironment(activeEntities) {
             const s = gameData;
             const now = Date.now();
             
-            for (let i = s.syrupZones.length - 1; i >= 0; i--) { if (now > s.syrupZones[i].expiresAt) s.syrupZones.splice(i, 1); }
-            for (let i = s.explosions.length - 1; i >= 0; i--) {
-                s.explosions[i].radius += 15; s.explosions[i].alpha -= 0.05; if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1);
+            // Syrup Expiry
+            for (let i = s.syrupZones.length - 1; i >= 0; i--) {
+                if (now > s.syrupZones[i].expiresAt) s.syrupZones.splice(i, 1);
             }
+            // Explosion Fade
+            for (let i = s.explosions.length - 1; i >= 0; i--) {
+                s.explosions[i].radius += 15;
+                s.explosions[i].alpha -= 0.05;
+                if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1);
+            }
+            // Food Respawn
             if (s.food.length < 400) {
                 for (let k = 0; k < 10; k++) {
-                    let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level });
+                    let level = 1;
+                    while (level < 100 && Math.random() < 0.5) level++;
+                    s.food.push({ x: randPosCell(), y: randPosCell(), level: level });
                 }
             }
-            
+            // Maple Harvest Effect (Turn food gold)
+            activeEntities.forEach((p) => {
+                if (p.country === "golden_maple" && p.maplePhase === "harvest") {
+                    s.food.forEach((f) => { if (dist(p, f) < 5 * CELL) f.isGolden = true; });
+                }
+            });
             // Food Collision
             s.food.forEach((f, i) => {
-                const foodLevel = f.level || 1; const rad = FOOD_RADIUS_BASE + foodLevel * 1.5;
+                const foodLevel = f.level || 1;
+                const rad = FOOD_RADIUS_BASE + foodLevel * 1.5;
                 activeEntities.forEach((p) => {
                     if (!p.dead && coll(p, f, p.scale + rad)) {
-                        if (p.id === currentState.myId && !currentState.isHost) {
-                            // Client Side Prediction Effect (Optional sound)
-                        } else if(p.id === 0) playSound("eat"); // Host sound
-
+                        if (p.id === currentState.myPlayerIndex) playSound("eat");
                         s.food.splice(i, 1);
                         const multiplier = f.isGolden ? 3 : 1;
                         p.length += LENGTH_GAIN * multiplier;
+                        // NERFED SIZE GAIN, CAP 2000
                         p.scale = Math.min(2000, p.scale + foodLevel * SIZE_GAIN_PER_LEVEL * multiplier);
                     }
                 });
             });
             
-            // Mines
+            // Mines Logic
             for (let i = s.mines.length - 1; i >= 0; i--) {
                 let m = s.mines[i];
                 const isBosnian = m.type === "bosnian";
                 const triggerRadius = 200; 
-                const explodeRadius = isBosnian ? 900 : 300; 
+                const explodeRadius = isBosnian ? 900 : 300; // 3x Bigger (900 vs 300)
+                const delay = isBosnian ? 500 : 3000; // 0.5s vs 3.0s
 
                 if (m.state === "idle") {
                     let triggered = false;
+                    let triggerer = null;
+
                     activeEntities.forEach((p) => { 
                         if (!p.dead) {
+                            // OWNER IMMUNITY: Bosnian mines don't trigger for owner
                             if (isBosnian && p.id === m.ownerId) return;
-                            if (dist(p, m) < triggerRadius) { triggered = true; m.state = "triggered"; m.lastTick = now; 
-                                // Stat update for local user
-                                if (p.id === currentState.myId) {
-                                    p.minesExplodedCurrentGame = (p.minesExplodedCurrentGame || 0) + 1;
-                                    updateStats({ minesExploded: p.minesExplodedCurrentGame });
-                                }
+
+                            if (dist(p, m) < triggerRadius) {
+                                triggered = true;
+                                triggerer = p;
                             }
                         }
                     });
+
+                    if (triggered) { 
+                        m.state = "triggered"; 
+                        m.lastTick = now; 
+                        
+                        // STAT TRACKING: If player triggered a non-Bosnian mine, count it
+                        // (Unlocking the skin requires exploding mines)
+                        if (triggerer && triggerer.id === currentState.myPlayerIndex && !isBosnian) {
+                            triggerer.minesExplodedCurrentGame = (triggerer.minesExplodedCurrentGame || 0) + 1;
+                            updateStats({ minesExploded: triggerer.minesExplodedCurrentGame });
+                        }
+                    }
                 } 
                 else if (m.state === "triggered") {
-                    if (now - m.lastTick > (isBosnian ? 500 : 3000)) {
-                        createExplosion(m.x, m.y, isBosnian ? 200 : 10); 
+                    if (now - m.lastTick > delay) {
+                        createExplosion(m.x, m.y, isBosnian ? 200 : 10); // Visual size
+                        
                         activeEntities.forEach((p) => { 
                             if (!p.dead) {
+                                // OWNER IMMUNITY: Explosion doesn't kill owner
                                 if (isBosnian && p.id === m.ownerId) return;
+
                                 if (dist(p, m) < explodeRadius) {
-                                    if(p.id !== undefined) killPlayer(p, null); else killEnemy(p, null);
+                                    if(p.id !== undefined) killPlayer(p, null); // Player
+                                    else killEnemy(p, null); // Bot
                                 }
                             }
                         });
@@ -1561,19 +1793,26 @@
             }
         }
 
+        // --- DEATH & COMBAT HELPERS ---
         function createExplosion(x, y, radius = 10) {
             gameData.explosions.push({ x, y, radius: radius, alpha: 1.0 });
-            // Shake screen for relevant players (Simplified: Shake for everyone if big boom)
-            gameData.shakeIntensity = Math.min(100, gameData.shakeIntensity + 30);
+            
+            // EXPLOSION SHAKE FIX: Only shake if player is close (< 10 Tiles / 1500 units)
+            const p = gameData.players[0];
+            if (p && !p.dead && dist(p, {x, y}) < 1500) {
+                gameData.shakeIntensity = Math.min(100, gameData.shakeIntensity + 30);
+            }
         }
 
         function killPlayer(victim, killer) {
             if (victim.dead) return;
-            if (victim.id === 0 && cheats.godMode) return;
+            if (victim.id === currentState.myPlayerIndex && cheats.godMode) return;
             
             victim.dead = true;
             victim.deaths++;
             victim.abilityActive = false;
+            victim.maplePhase = null;
+            victim.kingdomPhase = null;
 
             if (victim.id === currentState.myPlayerIndex) {
                 updateStats({ death: true, scale: victim.scale, length: victim.length });
@@ -1587,36 +1826,45 @@
             }
 
             createExplosion(victim.x, victim.y);
-            // Drop Body
+            // Drop Body as Food
             const totalValue = victim.length * 0.4;
             const foodCount = Math.max(3, Math.floor(totalValue / LENGTH_GAIN));
             for (let k = 0; k < foodCount; k++) {
                 const index = Math.floor(Math.random() * victim.body.length);
-                if (victim.body[index]) gameData.food.push({ x: victim.body[index].x, y: victim.body[index].y, level: Math.floor(Math.random() * 3) + 1 });
+                if (victim.body[index]) {
+                    gameData.food.push({ x: victim.body[index].x, y: victim.body[index].y, level: Math.floor(Math.random() * 3) + 1 });
+                }
             }
         }
 
         function killEnemy(e, killer) {
             if (!e.alive) return;
             e.alive = false;
-            if (killer) { killer.kills++; if (killer.id === currentState.myPlayerIndex) updateStats({ kill: true }); }
+            if (killer) {
+                killer.kills++;
+                if (killer.id === currentState.myPlayerIndex) updateStats({ kill: true });
+            }
             createExplosion(e.x, e.y);
             // Drop Body
-            const stepSize = Math.max(1, Math.floor(e.body.length / 10));
+            const totalValue = e.length * 0.4;
+            const foodCount = Math.max(3, Math.floor(totalValue / LENGTH_GAIN));
+            const stepSize = Math.max(1, Math.floor(e.body.length / foodCount));
             for (let i = 0; i < e.body.length; i += stepSize) {
                 const point = e.body[i];
                 if(point) gameData.food.push({ x: point.x + (Math.random() - 0.5) * 20, y: point.y + (Math.random() - 0.5) * 20, level: Math.floor(Math.random() * 3) + 1 });
             }
         }
 
+        // --- NETWORK DATA COMPRESSION ---
         function compressState(state) {
-            // Optimized packing for multiplayer
             return {
                 mode: state.mode,
                 shakeIntensity: Math.round(state.shakeIntensity),
                 food: state.food.map((f) => ({ x: Math.round(f.x), y: Math.round(f.y), l: f.level, g: f.isGolden ? 1 : 0 })),
                 mines: state.mines.map((m) => ({ x: Math.round(m.x), y: Math.round(m.y), state: m.state, type: m.type })),
-                explosions: state.explosions.map((e) => ({ x: Math.round(e.x), y: Math.round(e.y), radius: Math.round(e.radius), alpha: Number(e.alpha.toFixed(2)) })),
+                explosions: state.explosions.map((e) => ({
+                    x: Math.round(e.x), y: Math.round(e.y), radius: Math.round(e.radius), alpha: Number(e.alpha.toFixed(2))
+                })),
                 syrupZones: state.syrupZones.map((s) => ({ x: Math.round(s.x), y: Math.round(s.y), radius: s.radius, oid: s.ownerId })),
                 players: state.players.map((p) => ({
                     id: p.id, active: p.active, dead: p.dead, x: Math.round(p.x), y: Math.round(p.y),
@@ -1637,47 +1885,41 @@
         function loop(timestamp) {
             requestAnimationFrame(loop);
 
+            // Responsive Canvas
             if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
-                canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
             }
 
+            // Draw Menu Background
             if (currentState.menu !== 'playing' && currentState.menu !== 'death') {
-                // Main Menu BG
                 ctx.fillStyle = "#080b12"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = "rgba(0, 47, 108, 0.2)"; ctx.lineWidth = 1;
+                for (let i = 0; i < canvas.width; i += 50) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+                for (let j = 0; j < canvas.height; j += 50) { ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(canvas.width, j); ctx.stroke(); }
                 return;
             }
 
-            // --- HOST UPDATES ---
+            // Game Logic Updates
             if (currentState.isHost) {
-                // Update local stats for host player
-                const me = gameData.players.find(p => p.id === 0);
-                if (me && !me.dead && timestamp % 1000 < 16) {
-                    updateStats({ scale: me.scale, length: me.length });
+                if (timestamp % 1000 < 16 && gameData.players[0] && !gameData.players[0].dead) {
+                    updateStats({ scale: gameData.players[0].scale, length: gameData.players[0].length });
                 }
-                
                 updateHostLogic();
-                
+                // Broadcast
                 if (timestamp - lastSentTime > BROADCAST_RATE) {
                     const payload = { type: "STATE", state: compressState(gameData) };
                     connections.forEach(c => { if (c.open) c.send(payload); });
                     lastSentTime = timestamp;
                 }
             } 
-            
-            // --- CLIENT UPDATES ---
-            else if (currentState.isMultiplayerClient && serverState) {
-                // Send Input to Host
-                const inp = getLocalInput();
-                if (hostConn && hostConn.open) {
-                    hostConn.send({ type: "INPUT", angle: inp.targetAngle, sprint: inp.sprint, ability: inp.triggerAbility, respawn: inp.respawn });
-                }
-
-                // Interpolation & Client Prediction
+            else if (currentState.isSpectating && serverState) {
+                // Interpolate
                 const t = INTERPOLATION_SPEED;
                 const cur = gameData; 
                 const tar = serverState;
                 
-                // Globals
+                // Sync global ents
                 cur.food = tar.food.map(f => ({x:f.x, y:f.y, level:f.l, isGolden: f.g===1}));
                 cur.mines = tar.mines;
                 cur.explosions = tar.explosions;
@@ -1685,39 +1927,17 @@
                 cur.shakeIntensity = tar.shakeIntensity;
 
                 // Sync Players
-                cur.players = tar.players.map((tp, i) => {
-                    let p = cur.players.find(cp => cp.id === tp.id);
-                    if (!p) { p = { ...tp, body: [] }; } // New player
-
-                    // ZERO LAG LOGIC: If this is ME, predict movement locally
-                    if (p.id === currentState.myId && !p.dead) {
-                        // Apply input locally
-                        let speedMult = 1.0;
-                        if (inp.sprint && p.length > MIN_LENGTH) speedMult = 1.8;
-                        const s = BASE_SPEED * speedMult;
-                        const myAngle = inp.targetAngle !== null ? inp.targetAngle : p.angle;
-                        
-                        // Predict next pos
-                        const predX = p.x + Math.cos(myAngle) * s;
-                        const predY = p.y + Math.sin(myAngle) * s;
-                        
-                        // Lerp towards server pos to correct drift, but favor local prediction
-                        p.x = lerp(predX, tp.x, 0.1); 
-                        p.y = lerp(predY, tp.y, 0.1);
-                        p.angle = myAngle;
-                    } else {
-                        // Other players: Standard Interpolation
-                        p.x = lerp(p.x, tp.x, t); 
-                        p.y = lerp(p.y, tp.y, t);
+                cur.players.forEach((p, i) => {
+                    const tp = tar.players[i];
+                    if (tp) {
+                        p.x = lerp(p.x, tp.x, t); p.y = lerp(p.y, tp.y, t);
                         p.angle = lerpAngle(p.angle, tp.angle, t);
+                        p.scale = tp.scale; p.country = tp.country; p.dead = tp.dead;
+                        p.name = tp.name; p.abilityActive = tp.abilityActive; p.maplePhase = tp.maplePhase; p.kingdomPhase = tp.kingdomPhase;
+                        if (!p.body) p.body = [];
+                        p.body.unshift({ x: p.x, y: p.y });
+                        while (p.body.length > tp.length) p.body.pop();
                     }
-                    
-                    p.scale = tp.scale; p.country = tp.country; p.dead = tp.dead;
-                    p.name = tp.name; p.abilityActive = tp.abilityActive; p.maplePhase = tp.maplePhase; p.kingdomPhase = tp.kingdomPhase;
-                    
-                    p.body.unshift({ x: p.x, y: p.y });
-                    while (p.body.length > tp.length) p.body.pop();
-                    return p;
                 });
 
                 // Sync Enemies
@@ -1735,34 +1955,40 @@
                  });
             }
 
-            // HUD
-            let me;
-            if (currentState.isHost) me = gameData.players.find(p => p.id === 0);
-            else me = gameData.players.find(p => p.id === currentState.myId);
-            
-            if (me) {
+            // HUD Update
+            const me = gameData.players[0] || {};
+            if(!currentState.isSpectating) {
                 document.getElementById('hud-size').innerText = "Size: " + (me.scale || 18).toFixed(1);
                 document.getElementById('hud-kills').innerText = "Kills: " + (me.kills || 0);
+            }
+
+            // Ability HUD
+            const abInd = document.getElementById('ability-indicator');
+            const abTxt = document.getElementById('ability-text');
+            if(me.country === 'soviet' || me.country === 'golden_maple' || me.country === 'bosnian_kingdom') {
+                abInd.style.display = 'flex';
+                let cooldown = 60000;
+                if (me.country === 'bosnian_kingdom') cooldown = 30000;
+
+                const timeSince = Date.now() - (me.lastAbilityTime || 0);
+                const isActive = me.barrageActive || !!me.maplePhase || (me.kingdomPhase === "active");
                 
-                // Ability HUD
-                const abInd = document.getElementById('ability-indicator');
-                const abTxt = document.getElementById('ability-text');
-                if(me.country === 'soviet' || me.country === 'golden_maple' || me.country === 'bosnian_kingdom') {
-                    abInd.style.display = 'flex';
-                    let cooldown = 60000;
-                    if (me.country === 'bosnian_kingdom') cooldown = 30000;
-                    const timeSince = Date.now() - (me.lastAbilityTime || 0);
-                    const isActive = me.barrageActive || !!me.maplePhase || (me.kingdomPhase === "active");
-                    
-                    if (isActive) {
-                        abTxt.innerText = "ACTIVE"; abInd.style.borderColor = "#0f0"; abTxt.style.color = "#0f0";
-                    } else if (timeSince < cooldown) {
-                        const rem = Math.ceil((cooldown - timeSince)/1000);
-                        abTxt.innerText = rem + "s"; abInd.style.borderColor = "#555"; abTxt.style.color = "#aaa";
-                    } else {
-                        abTxt.innerText = "READY"; abInd.style.borderColor = "#FFD700"; abTxt.style.color = "#FFD700";
-                    }
-                } else { abInd.style.display = 'none'; }
+                if (isActive) {
+                    abTxt.innerText = "ACTIVE";
+                    abInd.style.borderColor = (Math.floor(Date.now()/200)%2===0) ? "#fff" : "#0f0";
+                    abTxt.style.color = "#0f0";
+                } else if (timeSince < cooldown) {
+                    const rem = Math.ceil((cooldown - timeSince)/1000);
+                    abTxt.innerText = rem + "s";
+                    abInd.style.borderColor = "#555";
+                    abTxt.style.color = "#aaa";
+                } else {
+                    abTxt.innerText = "READY";
+                    abInd.style.borderColor = "#FFD700";
+                    abTxt.style.color = "#FFD700";
+                }
+            } else {
+                abInd.style.display = 'none';
             }
 
             // --- DRAWING ---
@@ -1772,16 +1998,17 @@
             for (let i = 0; i < canvas.width; i += 50) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
             for (let j = 0; j < canvas.height; j += 50) { ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(canvas.width, j); ctx.stroke(); }
 
-            // Camera
+            // Camera Transform
             let sx = 0, sy = 0;
             if (gameData.shakeIntensity > 0) {
-                sx = (Math.random() - 0.5) * gameData.shakeIntensity; sy = (Math.random() - 0.5) * gameData.shakeIntensity;
+                sx = (Math.random() - 0.5) * gameData.shakeIntensity;
+                sy = (Math.random() - 0.5) * gameData.shakeIntensity;
                 gameData.shakeIntensity *= 0.9;
             }
 
             ctx.save();
             ctx.translate(canvas.width / 2 + sx, canvas.height / 2 + sy);
-            const focus = me || {x:0, y:0, scale:18};
+            const focus = currentState.isSpectating ? (gameData.players[0] || {x:0, y:0, scale:18}) : me;
             const startScale = 18;
             const zoom = Math.max(0.1, 0.6 * (30 / (30 + ((focus.scale || 18) - startScale) * 0.4)));
             ctx.scale(zoom, zoom);
@@ -1791,49 +2018,85 @@
             ctx.lineWidth = 12; ctx.strokeStyle = "rgba(255,0,0,0.9)";
             ctx.strokeRect(-WORLD_SIZE / 2, -WORLD_SIZE / 2, WORLD_SIZE, WORLD_SIZE);
 
-            // IRELAND ESP
-            if (focus.country === "ireland" && !focus.dead) {
-                 ctx.save(); ctx.strokeStyle = "rgba(0, 255, 0, 0.5)"; ctx.lineWidth = 2; ctx.setLineDash([10, 10]);
-                 gameData.enemies.forEach(e => { if (e.alive) { ctx.beginPath(); ctx.moveTo(focus.x, focus.y); ctx.lineTo(e.x, e.y); ctx.stroke(); } });
+            // IRELAND ESP (Restored)
+            if (me.country === "ireland" && !me.dead) {
+                 ctx.save();
+                 ctx.strokeStyle = "rgba(0, 255, 0, 0.5)";
+                 ctx.lineWidth = 2;
+                 ctx.setLineDash([10, 10]);
+                 gameData.enemies.forEach(e => {
+                     if (e.alive) {
+                         ctx.beginPath();
+                         ctx.moveTo(me.x, me.y);
+                         ctx.lineTo(e.x, e.y);
+                         ctx.stroke();
+                     }
+                 });
                  ctx.restore();
             }
 
-            // Render World
+            // Syrup Zones
             gameData.syrupZones.forEach((z) => {
                 ctx.fillStyle = "rgba(184, 134, 11, 0.5)"; ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = "#DAA520"; ctx.lineWidth = 4; ctx.stroke();
             });
 
+            // Food
             gameData.food.forEach((f) => {
-                const level = f.level || 1; const size = FOOD_RADIUS_BASE + level * 1.5;
+                const level = f.level || 1;
+                const size = FOOD_RADIUS_BASE + level * 1.5;
                 if (f.isGolden) { ctx.fillStyle = "#FFD700"; ctx.shadowColor = "#FFD700"; ctx.shadowBlur = 10; }
                 else { ctx.fillStyle = "orange"; ctx.shadowBlur = 0; }
                 ctx.beginPath(); ctx.arc(f.x, f.y, size, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
-            });
-
-            gameData.mines.forEach((m) => {
-                const r = 25; const d = r * 2;
-                if (m.type === "bosnian") {
-                    ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.clip();
-                    ctx.fillStyle = "#002395"; ctx.fillRect(m.x-r, m.y-r, r*2, r*2);
-                    ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(m.x, m.y, r/2, 0, Math.PI*2); ctx.fill();
-                    ctx.restore();
-                    ctx.strokeStyle = m.state === "triggered" ? "red" : "#FFD700"; 
-                    ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.stroke();
-                } else {
-                    ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.clip();
-                    ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3);
-                    ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3);
-                    ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3);
-                    ctx.restore();
-                    ctx.strokeStyle = m.state === "triggered" ? "red" : "#333"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.stroke();
+                // Highlight high level food
+                if (level > 8) {
+                    ctx.globalAlpha = 0.3; ctx.fillStyle = "white"; ctx.beginPath();
+                    ctx.arc(f.x, f.y, size + 3, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1.0;
                 }
             });
 
+            // Mines
+            gameData.mines.forEach((m) => {
+                if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) {
+                    ctx.fillStyle = "rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, Math.PI * 2); ctx.fill();
+                }
+                const r = 25; const d = r * 2;
+                
+                // BOSNIAN MINE RENDER
+                if (m.type === "bosnian") {
+                    ctx.save();
+                    ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.clip();
+                    ctx.fillStyle = "#002395"; ctx.fillRect(m.x-r, m.y-r, r*2, r*2);
+                    // Gold center
+                    ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(m.x, m.y, r/2, 0, Math.PI*2); ctx.fill();
+                    ctx.restore();
+                    // Red outline if triggered
+                    ctx.strokeStyle = m.state === "triggered" ? "red" : "#FFD700"; 
+                    ctx.lineWidth = 3; 
+                    ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.stroke();
+                    return; 
+                }
+
+                // NORMAL MINE RENDER
+                ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.clip();
+                // Mine Art (Detailed Flag Style)
+                ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3);
+                ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3);
+                ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3);
+                // Skull/Cross
+                ctx.fillStyle = "white"; ctx.beginPath();
+                ctx.moveTo(m.x - 10, m.y - 10); ctx.lineTo(m.x, m.y - 10); ctx.lineTo(m.x, m.y + 5);
+                ctx.lineTo(m.x - 5, m.y + 12); ctx.lineTo(m.x - 10, m.y + 5); ctx.fill();
+                ctx.restore();
+                ctx.strokeStyle = m.state === "triggered" ? "red" : "#333"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.stroke();
+            });
+
+            // Render Entities (Players + Bots)
             const allEntities = [...gameData.players, ...gameData.enemies];
             allEntities.forEach((p) => {
                 if (p.dead || p.alive === false) return;
 
+                // Effects
                 if (p.frozenUntil && Date.now() < p.frozenUntil) { ctx.shadowBlur = 15; ctx.shadowColor = "cyan"; }
                 else if (p.country === "soviet" && p.abilityActive) { ctx.shadowBlur = 30; ctx.shadowColor = "#FF0000"; }
                 else if (p.country === "golden_maple" && p.maplePhase === "harvest") {
@@ -1841,10 +2104,17 @@
                     ctx.strokeStyle = "rgba(218, 165, 32, 0.4)"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(p.x, p.y, 5 * CELL, 0, Math.PI * 2); ctx.stroke();
                 }
 
+                // BOSNIAN KINGDOM RING EFFECT
                 if (p.country === "bosnian_kingdom" && p.kingdomPhase === "active") {
-                    ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, 300, 0, Math.PI*2);
-                    ctx.strokeStyle = "rgba(0, 35, 149, 0.6)"; ctx.lineWidth = 10; ctx.stroke();
-                    ctx.fillStyle = "rgba(0, 35, 149, 0.2)"; ctx.fill(); ctx.restore();
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 300, 0, Math.PI*2);
+                    ctx.strokeStyle = "rgba(0, 35, 149, 0.6)";
+                    ctx.lineWidth = 10;
+                    ctx.stroke();
+                    ctx.fillStyle = "rgba(0, 35, 149, 0.2)";
+                    ctx.fill();
+                    ctx.restore();
                 }
 
                 // Body
@@ -1862,18 +2132,25 @@
 
                 // Head
                 const r = bodyW * 0.65;
-                ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle + Math.PI / 2);
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.angle + Math.PI / 2);
                 ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.clip();
+
                 drawFlag(ctx, p.country, r, p.color);
+
                 ctx.restore();
                 
                 // Name Tag
                 if(p.name && zoom > 0.3) {
-                     ctx.fillStyle = "white"; ctx.font = `bold ${Math.max(12, r)}px Arial`; ctx.textAlign = "center";
+                     ctx.fillStyle = "white"; 
+                     ctx.font = `bold ${Math.max(12, r)}px Arial`; 
+                     ctx.textAlign = "center";
                      ctx.fillText(p.name, p.x, p.y - r - 10);
                 }
             });
 
+            // Explosions
             gameData.explosions.forEach((ex) => {
                 ctx.fillStyle = `rgba(255,69,0,${ex.alpha})`; ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius, 0, Math.PI * 2); ctx.fill();
             });
@@ -1892,51 +2169,91 @@
             if (country === 'bosnia') {
                 rect(-r, -r, r * 2, r * 2, "#002F6C");
                 ctx.fillStyle = "#FECB00"; ctx.beginPath(); ctx.moveTo(r * 0.2, -r); ctx.lineTo(r * 0.2, r); ctx.lineTo(r, -r * 0.5); ctx.fill();
-                ctx.fillStyle = "white"; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.6 + i * r * 0.4, r * 0.1, 0, Math.PI * 2); ctx.fill(); }
+                ctx.fillStyle = "white";
+                for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.6 + i * r * 0.4, r * 0.1, 0, Math.PI * 2); ctx.fill(); }
             }
             else if (country === 'bosnian_kingdom') {
-                rect(-r, -r, r * 2, r * 2, "#002395");
-                ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(-r, -r); ctx.lineTo(r, r); ctx.lineTo(r, r-r/2); ctx.lineTo(-r+r/2, -r); ctx.fill();
-                ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r/2, r/2, r/4, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(r/2, -r/2, r/4, 0, Math.PI*2); ctx.fill();
+                // Medieval Coat of Arms (Simplified)
+                rect(-r, -r, r * 2, r * 2, "#002395"); // Royal Blue
+                // White Diagonal Band
+                ctx.fillStyle = "white";
+                ctx.beginPath();
+                ctx.moveTo(-r, -r); ctx.lineTo(r, r); 
+                ctx.lineTo(r, r-r/2); ctx.lineTo(-r+r/2, -r); 
+                ctx.fill();
+                // Golden Lilies (Yellow Dots)
+                ctx.fillStyle = "#FFD700";
+                ctx.beginPath(); ctx.arc(-r/2, r/2, r/4, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(r/2, -r/2, r/4, 0, Math.PI*2); ctx.fill();
             }
             else if (country === 'russia') {
-                rect(-r, -r, r * 2, (r * 2) / 3, "white"); rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0039A6"); rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "#D52B1E");
+                rect(-r, -r, r * 2, (r * 2) / 3, "white");
+                rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0039A6");
+                rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "#D52B1E");
             }
+            // CROATIA
             else if (country === 'croatia') {
-                rect(-r, -r, r*2, (r*2)/3, "red"); rect(-r, -r+(r*2)/3, r*2, (r*2)/3, "white"); rect(-r, -r+4*r/3, r*2, (r*2)/3, "blue");
-                ctx.fillStyle = "red"; ctx.fillRect(-r/2, -r/2, r, r); ctx.fillStyle = "white";
-                for(let y=0; y<2; y++) for(let x=0; x<2; x++) { if((x+y)%2===0) ctx.fillRect(-r/2 + x*(r/2), -r/2 + y*(r/2), r/2, r/2); }
+                // R-W-B Stripes
+                rect(-r, -r, r*2, (r*2)/3, "red");
+                rect(-r, -r+(r*2)/3, r*2, (r*2)/3, "white");
+                rect(-r, -r+4*r/3, r*2, (r*2)/3, "blue");
+                // Simplified Checkerboard Shield
+                ctx.fillStyle = "red";
+                ctx.fillRect(-r/2, -r/2, r, r);
+                ctx.fillStyle = "white";
+                for(let y=0; y<2; y++) for(let x=0; x<2; x++) {
+                   if((x+y)%2===0) ctx.fillRect(-r/2 + x*(r/2), -r/2 + y*(r/2), r/2, r/2);
+                }
             }
+            // SERBIA (AI SKIN)
             else if (country === 'serbia') {
-                rect(-r, -r, r * 2, (r * 2) / 3, "#C6363C"); rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0C4076"); rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "white");
+                rect(-r, -r, r * 2, (r * 2) / 3, "#C6363C"); // Red top
+                rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0C4076"); // Blue middle
+                rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "white"); // White bottom
             }
             else if (country === 'germany') {
-                rect(-r, -r, r * 2, (r * 2) / 3, "black"); rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#DD0000"); rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "#FFCC00");
+                rect(-r, -r, r * 2, (r * 2) / 3, "black");
+                rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#DD0000");
+                rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "#FFCC00");
             }
             else if (country === 'france') {
-                rect(-r, -r, (r * 2) / 3, r * 2, "#0055A4"); rect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2, "white"); rect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2, "#EF4135");
+                rect(-r, -r, (r * 2) / 3, r * 2, "#0055A4");
+                rect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2, "white");
+                rect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2, "#EF4135");
             }
             else if (country === 'italy') {
-                rect(-r, -r, (r * 2) / 3, r * 2, "#008C45"); rect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2, "white"); rect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2, "#CD212A");
+                rect(-r, -r, (r * 2) / 3, r * 2, "#008C45");
+                rect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2, "white");
+                rect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2, "#CD212A");
             }
             else if (country === 'ireland') {
-                rect(-r, -r, (r * 2) / 3, r * 2, "#169B62"); rect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2, "#FFFFFF"); rect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2, "#FF883E");
+                // FIXED IRELAND SKIN
+                rect(-r, -r, (r * 2) / 3, r * 2, "#169B62"); // Green
+                rect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2, "#FFFFFF"); // White
+                rect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2, "#FF883E"); // Orange
             }
             else if (country === 'ukraine') {
-                rect(-r, -r, r * 2, r, "#0057B8"); rect(-r, 0, r * 2, r, "#FFD700");
+                rect(-r, -r, r * 2, r, "#0057B8");
+                rect(-r, 0, r * 2, r, "#FFD700");
             }
             else if (country === 'poland') {
-                rect(-r, -r, r * 2, r, "white"); rect(-r, 0, r * 2, r, "#DC143C");
+                rect(-r, -r, r * 2, r, "white");
+                rect(-r, 0, r * 2, r, "#DC143C");
             }
             else if (country === 'canada') {
-                rect(-r, -r, (r * 2) / 4, r * 2, "#FF0000"); rect(-r + (r * 2) / 4, -r, r, r * 2, "white"); rect(r / 2, -r, (r * 2) / 4, r * 2, "#FF0000");
+                rect(-r, -r, (r * 2) / 4, r * 2, "#FF0000");
+                rect(-r + (r * 2) / 4, -r, r, r * 2, "white");
+                rect(r / 2, -r, (r * 2) / 4, r * 2, "#FF0000");
                 ctx.fillStyle = "#FF0000"; ctx.beginPath(); ctx.moveTo(0, -r * 0.4); ctx.lineTo(r * 0.3, 0); ctx.lineTo(0, r * 0.4); ctx.lineTo(-r * 0.3, 0); ctx.fill();
             }
             else if (country === 'usa') {
                 rect(-r, -r, r * 2, r * 2, "white");
                 for (let i = 0; i < 7; i++) rect(-r, -r + (i * 2 * r / 7), r * 2, r / 7, "#B22234");
                 rect(-r, -r, r, r * 0.8, "#3C3B6E");
-                ctx.fillStyle = "white"; for (let py = 0; py < 3; py++) for (let px = 0; px < 4; px++) { ctx.beginPath(); ctx.arc(-r + 5 + px * (r / 4), -r + 5 + py * (r / 4), 2, 0, Math.PI * 2); ctx.fill(); }
+                ctx.fillStyle = "white";
+                for (let py = 0; py < 3; py++) for (let px = 0; px < 4; px++) {
+                    ctx.beginPath(); ctx.arc(-r + 5 + px * (r / 4), -r + 5 + py * (r / 4), 2, 0, Math.PI * 2); ctx.fill();
+                }
             }
             else if (country === 'soviet') {
                 rect(-r, -r, r * 2, r * 2, "#CC0000");
@@ -1944,20 +2261,34 @@
                 ctx.strokeStyle = "#FFD700"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(-r * 0.4, -r * 0.2, r * 0.2, 0, Math.PI); ctx.stroke();
             }
             else if (country === 'golden_maple') {
-                rect(-r, -r, r*2, r*2, "white"); rect(-r, -r, (r*2)/4, r*2, "#FFFF00"); rect(r/2, -r, (r*2)/4, r*2, "#FFFF00");
-                ctx.fillStyle = "#FFFF00"; ctx.beginPath(); ctx.moveTo(0, -r * 0.4); ctx.lineTo(r * 0.3, 0); ctx.lineTo(0, r * 0.4); ctx.lineTo(-r * 0.3, 0); ctx.fill();
+                // FIXED GOLDEN MAPLE SKIN (Based on image)
+                rect(-r, -r, r*2, r*2, "white"); // White Background
+                rect(-r, -r, (r*2)/4, r*2, "#FFFF00"); // Yellow Left Band (approx 1/4)
+                rect(r/2, -r, (r*2)/4, r*2, "#FFFF00"); // Yellow Right Band
+                // Yellow Leaf
+                ctx.fillStyle = "#FFFF00"; 
+                ctx.beginPath(); ctx.moveTo(0, -r * 0.4); ctx.lineTo(r * 0.3, 0); ctx.lineTo(0, r * 0.4); ctx.lineTo(-r * 0.3, 0); ctx.fill();
             }
             else if (country === 'sweden') {
-                rect(-r, -r, r * 2, r * 2, "#006AA7"); rect(-r, -r * 0.2, r * 2, r * 0.4, "#FECC00"); rect(-r * 0.2, -r, r * 0.4, r * 2, "#FECC00");
+                rect(-r, -r, r * 2, r * 2, "#006AA7");
+                rect(-r, -r * 0.2, r * 2, r * 0.4, "#FECC00");
+                rect(-r * 0.2, -r, r * 0.4, r * 2, "#FECC00");
             }
             else if (country === 'denmark') {
-                rect(-r, -r, r * 2, r * 2, "#C60C30"); rect(-r, -r * 0.2, r * 2, r * 0.4, "white"); rect(-r * 0.2, -r, r * 0.4, r * 2, "white");
+                rect(-r, -r, r * 2, r * 2, "#C60C30");
+                rect(-r, -r * 0.2, r * 2, r * 0.4, "white");
+                rect(-r * 0.2, -r, r * 0.4, r * 2, "white");
             }
             else if (country === 'uk') {
-                rect(-r, -r, r * 2, r * 2, "#012169"); rect(-r, -r * 0.3, r * 2, r * 0.6, "white"); rect(-r * 0.3, -r, r * 0.6, r * 2, "white");
-                rect(-r, -r * 0.15, r * 2, r * 0.3, "#C8102E"); rect(-r * 0.15, -r, r * 0.3, r * 2, "#C8102E");
+                rect(-r, -r, r * 2, r * 2, "#012169");
+                rect(-r, -r * 0.3, r * 2, r * 0.6, "white");
+                rect(-r * 0.3, -r, r * 0.6, r * 2, "white");
+                rect(-r, -r * 0.15, r * 2, r * 0.3, "#C8102E");
+                rect(-r * 0.15, -r, r * 0.3, r * 2, "#C8102E");
             }
-            else { rect(-r, -r, r * 2, r * 2, fallbackColor || "#333"); }
+            else {
+                rect(-r, -r, r * 2, r * 2, fallbackColor || "#333");
+            }
         }
 
         // -------------------------------------------------------------------------
@@ -1967,7 +2298,7 @@
         function toggleUI(mode) {
             currentState.menu = mode;
             document.getElementById('menu-container').style.display = mode === 'start' ? 'flex' : 'none';
-            document.getElementById('hud').style.display = mode === 'playing' ? 'flex' : 'none';
+            document.getElementById('hud').style.display = mode === 'playing' && !currentState.isSpectating ? 'flex' : 'none';
             document.getElementById('chat-container').style.display = mode === 'playing' ? 'flex' : 'none';
             document.getElementById('death-screen').style.display = mode === 'death' ? 'block' : 'none';
             document.getElementById('spectator-label').style.display = currentState.isSpectating ? 'block' : 'none';
@@ -1989,7 +2320,10 @@
                     ${!unlocked ? `<div class="lock-text">🔒 ${req.label}</div>` : ''}
                 `;
                 div.onclick = () => {
-                    if (unlocked) { currentState.selectedSkin = skin; renderSkinGrid(); }
+                    if (unlocked) {
+                        currentState.selectedSkin = skin;
+                        renderSkinGrid();
+                    }
                 };
                 grid.appendChild(div);
             });
@@ -2002,12 +2336,17 @@
                 const lbRef = collection(db, "leaderboard");
                 const q = query(lbRef, where("name", "==", currentState.playerName));
                 const snap = await getDocs(q);
-                if (snap.empty) { await addDoc(lbRef, { name: currentState.playerName, size: size, timestamp: serverTimestamp() }); } 
-                else { const d = snap.docs[0]; if (size > d.data().size) updateDoc(doc(db, "leaderboard", d.id), { size: size }); }
+                if (snap.empty) {
+                    await addDoc(lbRef, { name: currentState.playerName, size: size, timestamp: serverTimestamp() });
+                } else {
+                    const d = snap.docs[0];
+                    if (size > d.data().size) updateDoc(doc(db, "leaderboard", d.id), { size: size });
+                }
             } catch (e) { console.error("Leaderboard Error", e); }
         }
 
         async function startScanner() {
+            // Live Games Scanner
             const scan = async () => {
                 if(!authReady) return;
                 try {
@@ -2021,27 +2360,26 @@
 
                     snap.docs.forEach(doc => {
                         const data = doc.data();
+                        // Filter out old or inactive
                         if (data.lastBeat && (now - data.lastBeat.toMillis() < 30000)) {
                             found++;
-                            const isServer = data.isServer;
+                            const isOfficial = data.type === 'official';
                             const row = document.createElement('div');
                             row.className = 'spectate-row';
-                            // Different rendering for Public Server vs Single Player
-                            const btnColor = isServer ? "#00FF00" : "#28a745";
-                            const btnText = isServer ? "JOIN GAME" : "SPECTATE";
+                            if (isOfficial) row.classList.add('server-official');
+
+                            const nameHtml = isOfficial 
+                                ? `<b style="color:#FFD700">★ OFFICIAL SERVER</b>` 
+                                : `<b>${data.host}</b>`;
+                                
+                            const btnColor = isOfficial ? 'gold' : '#28a745';
+                            const btnText = isOfficial ? 'JOIN NOW' : 'JOIN';
+                            const txtColor = isOfficial ? 'black' : 'white';
+
+                            row.innerHTML = `<div>${nameHtml}</div><div style="background:${btnColor}; padding:3px 6px; border-radius:3px; font-size:10px; color:${txtColor}; font-weight:bold;">${btnText}</div>`;
                             
-                            row.innerHTML = `<div><b>${data.host}</b></div><div style="background:${btnColor}; padding:3px 6px; border-radius:3px; font-size:10px; color:${isServer?'black':'white'}; font-weight:bold;">${btnText}</div>`;
-                            
-                            row.onclick = () => {
-                                if (isServer) initJoinGame(doc.id);
-                                else { 
-                                    // Legacy Spectate for single player games
-                                    // (Or maybe enable joining there too? For now, keep spectate separate)
-                                    // initJoinGame(doc.id) -> this handles joining logic, but single player host needs to accept it.
-                                    // The updated initHost logic handles connections as players, so "SPECTATE" becomes "JOIN" technically.
-                                    initJoinGame(doc.id);
-                                }
-                            };
+                            // INSTANT JOIN LOGIC
+                            row.onclick = () => initSpectate(doc.id);
                             list.appendChild(row);
                         }
                     });
@@ -2049,8 +2387,9 @@
                 } catch(e) { console.warn("Scanner error", e); }
             };
             scan();
-            setInterval(scan, 8000);
+            setInterval(scan, 10000);
 
+            // Leaderboard Listener
             try {
                 onSnapshot(query(collection(db, "leaderboard"), orderBy("size", "desc"), limit(5)), (snap) => {
                     const div = document.getElementById('leaderboard-content');
@@ -2082,12 +2421,19 @@
             keys[k] = true;
             if (audioCtx.state === 'suspended') audioCtx.resume();
             
+            // Chat Focus Check
             if (document.activeElement === document.getElementById('chat-input') && k !== 'escape') return;
 
+            // Cheat Panel Toggle
             if (e.key === '`' || e.key === '~') {
                 e.preventDefault();
-                if (showOwnerPanel) { showOwnerPanel = false; document.getElementById('owner-control-panel').style.display = 'none'; } 
-                else { showOwnerLogin = !showOwnerLogin; document.getElementById('owner-login-panel').style.display = showOwnerLogin ? 'block' : 'none'; if(showOwnerLogin) document.getElementById('owner-password').focus(); }
+                if (showOwnerPanel) {
+                    showOwnerPanel = false;
+                    document.getElementById('owner-control-panel').style.display = 'none';
+                } else {
+                    // Legacy keybind kept, but button exists now
+                    document.getElementById('btn-admin-open').click();
+                }
             }
         });
 
@@ -2096,42 +2442,67 @@
             keys[e.key.toLowerCase()] = false;
         });
         
-        window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
-        window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
+        window.addEventListener('mousemove', e => { 
+            mouse.x = e.clientX; 
+            mouse.y = e.clientY; 
+        });
 
-        document.getElementById('btn-play').onclick = () => {
-            if (currentState.canHostServer) initHost(true); // Public Server
-            else initHost(false); // Private/Single
+        window.addEventListener('resize', () => {
+             canvas.width = window.innerWidth;
+             canvas.height = window.innerHeight;
+        });
+
+        // Button Listeners
+        document.getElementById('btn-play').onclick = initSinglePlayer;
+        document.getElementById('btn-mouse').onclick = () => {
+            currentState.controlMode = 'mouse';
+            document.getElementById('btn-mouse').classList.add('active');
+            document.getElementById('btn-keyboard').classList.remove('active');
         };
-        
-        document.getElementById('btn-mouse').onclick = () => { currentState.controlMode = 'mouse'; document.getElementById('btn-mouse').classList.add('active'); document.getElementById('btn-keyboard').classList.remove('active'); };
-        document.getElementById('btn-keyboard').onclick = () => { currentState.controlMode = 'keyboard'; document.getElementById('btn-keyboard').classList.add('active'); document.getElementById('btn-mouse').classList.remove('active'); };
-        document.getElementById('cat-normal').onclick = () => { currentState.skinCategory = 'normal'; document.getElementById('cat-normal').classList.add('active'); document.getElementById('cat-special').classList.remove('active'); renderSkinGrid(); };
-        document.getElementById('cat-special').onclick = () => { currentState.skinCategory = 'special'; document.getElementById('cat-special').classList.add('active'); document.getElementById('cat-normal').classList.remove('active'); renderSkinGrid(); };
-        document.getElementById('nickname-input').oninput = (e) => { currentState.playerName = e.target.value; localStorage.setItem('bosnia_snake_username', e.target.value); };
+        document.getElementById('btn-keyboard').onclick = () => {
+            currentState.controlMode = 'keyboard';
+            document.getElementById('btn-keyboard').classList.add('active');
+            document.getElementById('btn-mouse').classList.remove('active');
+        };
+        document.getElementById('cat-normal').onclick = () => {
+            currentState.skinCategory = 'normal';
+            document.getElementById('cat-normal').classList.add('active');
+            document.getElementById('cat-special').classList.remove('active');
+            renderSkinGrid();
+        };
+        document.getElementById('cat-special').onclick = () => {
+            currentState.skinCategory = 'special';
+            document.getElementById('cat-special').classList.add('active');
+            document.getElementById('cat-normal').classList.remove('active');
+            renderSkinGrid();
+        };
+        document.getElementById('nickname-input').oninput = (e) => {
+            currentState.playerName = e.target.value;
+            localStorage.setItem('bosnia_snake_username', e.target.value);
+        };
         document.getElementById('nickname-input').value = currentState.playerName;
 
         document.getElementById('btn-redeem').onclick = () => {
             const code = document.getElementById('redeem-input').value;
+            
+            // --- SECRET CODES ---
             if (code === "Ireland_isgreat") {
-                if(!isSkinUnlocked('ireland')) { updateStats({ unlockSecret: "ireland" }); alert("Ireland Skin Unlocked!"); renderSkinGrid(); } else alert("Already Unlocked");
+                if(!isSkinUnlocked('ireland')) {
+                    updateStats({ unlockSecret: "ireland" });
+                    alert("SUCCESS: Ireland Skin Unlocked!");
+                    renderSkinGrid();
+                } else alert("Already Unlocked");
             } 
-            else if (code === ADMIN_HOST_CODE) {
-                currentState.canHostServer = true;
-                alert("ADMIN ACCESS GRANTED: Server Hosting Mode Enabled.\n\nClicking 'PLAY' will now host a PUBLIC SERVER.");
-                const btn = document.getElementById('btn-play');
-                btn.innerText = "HOST SERVER";
-                btn.className = "btn-primary btn-host";
-            }
             else alert("Invalid Code");
         };
 
+        // Chat
         document.getElementById('chat-input').onkeydown = (e) => {
             if (e.key === 'Enter') {
                 const text = e.target.value;
                 if (text.trim()) {
                     if (currentState.isHost) {
-                        const msg = { name: currentState.playerName + " [HOST]", text: text, color: "#FECB00" };
+                        const msg = { name: currentState.playerName, text: text, color: "#FECB00" };
                         addChatMessage(msg.name, msg.text, msg.color);
                         playSound("chat");
                         broadcastChat(msg);
@@ -2146,22 +2517,78 @@
         };
 
         // Owner / Cheats
+        document.getElementById('btn-admin-open').onclick = () => {
+             showOwnerLogin = true;
+             document.getElementById('owner-login-panel').style.display = 'block';
+             document.getElementById('owner-password').focus();
+        };
+
+        document.getElementById('btn-owner-close').onclick = () => {
+             showOwnerLogin = false;
+             document.getElementById('owner-login-panel').style.display = 'none';
+        };
+
         document.getElementById('btn-owner-login').onclick = () => {
-            if(document.getElementById('owner-password').value === OWNER_PASSWORD) {
-                showOwnerLogin = false; document.getElementById('owner-login-panel').style.display = 'none'; showOwnerPanel = true; document.getElementById('owner-control-panel').style.display = 'block'; document.getElementById('cheat-msg').innerText = "ACCESS GRANTED";
-            } else alert("ACCESS DENIED");
+            const pass = document.getElementById('owner-password').value;
+            if(pass === OWNER_PASSWORD) {
+                showOwnerLogin = false;
+                document.getElementById('owner-login-panel').style.display = 'none';
+                showOwnerPanel = true;
+                document.getElementById('owner-control-panel').style.display = 'block';
+                document.getElementById('cheat-msg').innerText = "ACCESS GRANTED";
+            } else {
+                alert("ACCESS DENIED");
+            }
         };
         
-        const setCheatMsg = (txt) => { const el = document.getElementById('cheat-msg'); el.innerText = txt; setTimeout(() => el.innerText = '', 2000); };
-        document.getElementById('cheat-god').onclick = () => { cheats.godMode = !cheats.godMode; document.getElementById('cheat-god').innerText = "God Mode: " + (cheats.godMode ? "ON" : "OFF"); setCheatMsg("God Mode " + (cheats.godMode ? "Enabled" : "Disabled")); };
-        document.getElementById('cheat-speed').onclick = () => { cheats.speedHack = !cheats.speedHack; document.getElementById('cheat-speed').innerText = "Speed Hack: " + (cheats.speedHack ? "ON" : "OFF"); setCheatMsg("Speed " + (cheats.speedHack ? "Boosted" : "Normal")); };
-        document.getElementById('cheat-size').onclick = () => { if(gameData.players[0]) { gameData.players[0].scale = 50; gameData.players[0].length = 500; setCheatMsg("Size Set to 50"); } };
-        document.getElementById('cheat-killbots').onclick = () => { gameData.enemies.forEach(e => { if(e.alive) killEnemy(e, null); }); setCheatMsg("Bots Cleared"); };
-        document.getElementById('cheat-reset').onclick = () => { resetWorld(true); setCheatMsg("World Reset"); };
+        // Cheat Buttons
+        const setCheatMsg = (txt) => {
+            const el = document.getElementById('cheat-msg');
+            el.innerText = txt;
+            setTimeout(() => el.innerText = '', 2000);
+        };
 
+        document.getElementById('cheat-host-server').onclick = () => {
+            showOwnerPanel = false;
+            document.getElementById('owner-control-panel').style.display = 'none';
+            initAdminServer();
+        };
+
+        document.getElementById('cheat-god').onclick = () => {
+            cheats.godMode = !cheats.godMode;
+            document.getElementById('cheat-god').innerText = "God Mode: " + (cheats.godMode ? "ON" : "OFF");
+            setCheatMsg("God Mode " + (cheats.godMode ? "Enabled" : "Disabled"));
+        };
+        document.getElementById('cheat-speed').onclick = () => {
+            cheats.speedHack = !cheats.speedHack;
+            document.getElementById('cheat-speed').innerText = "Speed Hack: " + (cheats.speedHack ? "ON" : "OFF");
+            setCheatMsg("Speed " + (cheats.speedHack ? "Boosted" : "Normal"));
+        };
+        document.getElementById('cheat-size').onclick = () => {
+            if(gameData.players[0]) {
+                gameData.players[0].scale = 50;
+                gameData.players[0].length = 500;
+                setCheatMsg("Size Set to 50");
+            }
+        };
+        document.getElementById('cheat-killbots').onclick = () => {
+            gameData.enemies.forEach(e => { if(e.alive) killEnemy(e, null); });
+            setCheatMsg("Bots Cleared");
+        };
+        document.getElementById('cheat-reset').onclick = () => {
+            resetWorld(true);
+            setCheatMsg("World Reset");
+        };
+
+        // -------------------------------------------------------------------------
+        // STARTUP
+        // -------------------------------------------------------------------------
         updateStatsUI();
         renderSkinGrid();
         requestAnimationFrame(loop);
+
+        console.log("Bosnia Snake Ultimate Loaded. Admin Access Ready.");
+
     </script>
 </body>
 </html>
