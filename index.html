@@ -1,10 +1,10 @@
-``html
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: Leveling Update</title>
+    <title>Bosnia Snake: Leveling Update (Fix)</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -848,6 +848,8 @@
         let hostConn = null;
         let lastSentTime = 0;
         let serverState = null;
+        let heartbeatInterval = null; // Track heartbeat to clear it on unload
+
         const mouse = { x: 0, y: 0 };
         const keys = {};
 
@@ -952,15 +954,37 @@
             if (updates.minesExploded && updates.minesExploded > userStats.maxMinesInGame) { userStats.maxMinesInGame = updates.minesExploded; changed = true; }
             if (changed) { localStorage.setItem('bosnia_snake_stats_v2', JSON.stringify(userStats)); updateStatsUI(); renderSkinGrid(); }
         }
+        
+        // --- CLEANUP FUNCTION FOR SERVER ENTRIES ---
+        function cleanupPreviousSession() {
+            if (currentState.myId && authReady) {
+                console.log("Cleaning up session:", currentState.myId);
+                const docRef = doc(db, "active_games", currentState.myId);
+                deleteDoc(docRef).catch(e => console.error("Cleanup failed", e));
+                currentState.myId = null;
+            }
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        }
+        
+        // Ensure cleanup runs when tab closes
+        window.addEventListener("beforeunload", () => {
+           cleanupPreviousSession();
+        });
 
         function initSinglePlayer() {
+            cleanupPreviousSession(); // Clean before starting new
             if (peer) peer.destroy(); peer = new Peer({ debug: 1 });
             peer.on('open', (id) => {
                 currentState.myId = id; currentState.isHost = true; currentState.isDedicatedServer = false; currentState.isSpectating = false; currentState.isPlayingClient = false; currentState.myPlayerIndex = 0; currentState.menu = 'playing';
                 if(authReady) {
                     const docRef = doc(db, "active_games", id);
                     const publish = () => setDoc(docRef, { host: currentState.playerName, lastBeat: serverTimestamp(), type: 'public' }).catch(e => console.warn("Presence err", e));
-                    publish(); const hb = setInterval(publish, 5000); peer.on('disconnected', () => clearInterval(hb));
+                    publish(); 
+                    heartbeatInterval = setInterval(publish, 5000); 
+                    peer.on('disconnected', () => clearInterval(heartbeatInterval));
                 }
                 updateStats({ game: true });
                 updateHUDXP(); // Initialize XP bar
@@ -986,6 +1010,7 @@
         const playerInputs = {}; // Map id -> input state
 
         function initAdminServer() {
+            cleanupPreviousSession(); // Clean before starting new
             if (peer) peer.destroy(); peer = new Peer({ debug: 1 });
             peer.on('open', (id) => {
                 currentState.myId = id; 
@@ -1000,7 +1025,9 @@
                 if(authReady) {
                     const docRef = doc(db, "active_games", id);
                     const publish = () => setDoc(docRef, { host: "OFFICIAL SERVER", lastBeat: serverTimestamp(), type: 'official', players: connections.length }).catch(e => console.warn("Presence err", e));
-                    publish(); const hb = setInterval(publish, 4000); peer.on('disconnected', () => clearInterval(hb));
+                    publish(); 
+                    heartbeatInterval = setInterval(publish, 4000); 
+                    peer.on('disconnected', () => clearInterval(heartbeatInterval));
                 }
                 gameData.mode = "server";
                 gameData.players = []; // No Admin Snake
