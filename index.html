@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: High Graphics Update</title>
+    <title>Bosnia Snake: Fadeaway Update</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -1277,7 +1277,16 @@
         function updateEnvironment(activeEntities) {
             const s = gameData; const now = Date.now();
             for (let i = s.syrupZones.length - 1; i >= 0; i--) { if (now > s.syrupZones[i].expiresAt) s.syrupZones.splice(i, 1); }
-            for (let i = s.explosions.length - 1; i >= 0; i--) { s.explosions[i].radius += 15; s.explosions[i].alpha -= 0.1; if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1); }
+            
+            // --- UPDATED EXPLOSION LOGIC ---
+            // Slower fade (1.5 seconds) and steady smoke-like expansion
+            for (let i = s.explosions.length - 1; i >= 0; i--) { 
+                s.explosions[i].radius += 3;  // Steady expansion
+                s.explosions[i].alpha -= 0.011; // 1.5s duration
+                if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1); 
+            }
+            // ------------------------------
+
             if (s.food.length < 400) { for (let k = 0; k < 10; k++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); } }
             activeEntities.forEach((p) => { if (p.country === "golden_maple" && p.maplePhase === "harvest") { s.food.forEach((f) => { if (distSq(p, f) < (5 * CELL)**2) f.isGolden = true; }); } });
             
