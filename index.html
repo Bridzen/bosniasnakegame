@@ -1,4 +1,4 @@
-``html
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -405,6 +405,8 @@
             width: 300px;
             box-shadow: 0 0 50px red;
             text-align: center;
+            /* FIX: Allow interaction */
+            pointer-events: auto;
         }
         #owner-control-panel {
             position: absolute;
@@ -418,6 +420,8 @@
             z-index: 999;
             display: none;
             box-shadow: 0 0 20px red;
+            /* FIX: Allow interaction */
+            pointer-events: auto;
         }
         .cheat-btn {
             display: block;
@@ -454,6 +458,7 @@
             color: #555;
             border: 1px solid #444;
             cursor: pointer;
+            pointer-events: auto;
         }
         #btn-admin-open:hover {
             color: red;
