@@ -341,6 +341,7 @@
             outline: none;
             width: 100%;
             box-sizing: border-box;
+            pointer-events: auto;
         }
 
         /* --- SPECTATE LIST --- */
@@ -659,6 +660,7 @@
         const LENGTH_GAIN = 8;
         const BROADCAST_RATE = 45;
         const INTERPOLATION_SPEED = 0.35;
+        const TWO_PI = Math.PI * 2; // Cached Math constant for lag reduction
 
         const SKINS_NORMAL = [
             "bosnia", "russia", "germany", "france", "canada", "ukraine", 
@@ -761,7 +763,7 @@
         function coll(a, b, r) { return dist(a, b) < r; }
         function normalizeAngle(angle) { return Math.atan2(Math.sin(angle), Math.cos(angle)); }
         function lerp(start, end, t) { return start * (1 - t) + end * t; }
-        function lerpAngle(a, b, t) { const da = (b - a) % (2 * Math.PI); const twoD = ((2 * da) % (2 * Math.PI)) - da; return a + twoD * t; }
+        function lerpAngle(a, b, t) { const da = (b - a) % TWO_PI; const twoD = ((2 * da) % TWO_PI) - da; return a + twoD * t; }
 
         function updateStatsUI() {
             document.getElementById('stat-kills').innerText = userStats.totalKills;
@@ -1034,7 +1036,7 @@
                     const radius = 300;
                     for (let i = gameData.food.length - 1; i >= 0; i--) { if (dist(p, gameData.food[i]) < radius) { gameData.food.splice(i, 1); gameData.mines.push({ x: p.x + (Math.random()-0.5)*50, y: p.y + (Math.random()-0.5)*50, state: "idle", type: "bosnian", ownerId: p.id, timer: 0.5, lastTick: now }); } }
                     gameData.mines.forEach(m => { if (dist(p, m) < radius && m.type !== "bosnian") { m.type = "bosnian"; m.ownerId = p.id; m.state = "idle"; } });
-                    for(let i=0; i<8; i++) { const angle = (i / 8) * Math.PI * 2; gameData.mines.push({ x: p.x + Math.cos(angle) * 250, y: p.y + Math.sin(angle) * 250, state: "idle", type: "bosnian", ownerId: p.id, timer: 0.5, lastTick: now }); }
+                    for(let i=0; i<8; i++) { const angle = (i / 8) * TWO_PI; gameData.mines.push({ x: p.x + Math.cos(angle) * 250, y: p.y + Math.sin(angle) * 250, state: "idle", type: "bosnian", ownerId: p.id, timer: 0.5, lastTick: now }); }
                 }
                 if (p.kingdomPhase === "active" && now > p.phaseEndTime) p.kingdomPhase = null;
             }
@@ -1218,37 +1220,64 @@
             const focus = (currentState.isSpectating && gameData.players.length > 0) ? gameData.players[0] : (me.x !== undefined ? me : {x:0, y:0, scale:18});
             const startScale = 18; const zoom = Math.max(0.1, 0.6 * (30 / (30 + ((focus.scale || 18) - startScale) * 0.4)));
             ctx.scale(zoom, zoom); ctx.translate(-focus.x, -focus.y);
+            
+            // --- OPTIMIZATION: View Culling ---
+            const vw = canvas.width / zoom; const vh = canvas.height / zoom;
+            const viewLeft = focus.x - vw/2 - 1000; const viewRight = focus.x + vw/2 + 1000;
+            const viewTop = focus.y - vh/2 - 1000; const viewBottom = focus.y + vh/2 + 1000;
+
             ctx.lineWidth = 12; ctx.strokeStyle = "rgba(255,0,0,0.9)"; ctx.strokeRect(-WORLD_SIZE / 2, -WORLD_SIZE / 2, WORLD_SIZE, WORLD_SIZE);
             if (me.country === "ireland" && !me.dead) { ctx.save(); ctx.strokeStyle = "rgba(0, 255, 0, 0.5)"; ctx.lineWidth = 2; ctx.setLineDash([10, 10]); gameData.enemies.forEach(e => { if (e.alive) { ctx.beginPath(); ctx.moveTo(me.x, me.y); ctx.lineTo(e.x, e.y); ctx.stroke(); } }); ctx.restore(); }
             gameData.syrupZones.forEach((z) => { ctx.fillStyle = "rgba(184, 134, 11, 0.5)"; ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#DAA520"; ctx.lineWidth = 4; ctx.stroke(); });
-            gameData.food.forEach((f) => { const level = f.level || 1; const size = FOOD_RADIUS_BASE + level * 1.5; if (f.isGolden) { ctx.fillStyle = "#FFD700"; ctx.shadowColor = "#FFD700"; ctx.shadowBlur = 10; } else { ctx.fillStyle = "orange"; ctx.shadowBlur = 0; } ctx.beginPath(); ctx.arc(f.x, f.y, size, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; if (level > 8) { ctx.globalAlpha = 0.3; ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(f.x, f.y, size + 3, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1.0; } });
+            
+            gameData.food.forEach((f) => { 
+                if (f.x < viewLeft || f.x > viewRight || f.y < viewTop || f.y > viewBottom) return; // Culling
+                const level = f.level || 1; const size = FOOD_RADIUS_BASE + level * 1.5; 
+                // OPTIMIZATION: Removed ShadowBlur, use manual glow for Golden Food
+                if (f.isGolden) { 
+                    ctx.fillStyle = "rgba(255, 215, 0, 0.4)"; ctx.beginPath(); ctx.arc(f.x, f.y, size+5, 0, TWO_PI); ctx.fill(); // Fake glow
+                    ctx.fillStyle = "#FFD700"; 
+                } else { ctx.fillStyle = "orange"; } 
+                ctx.beginPath(); ctx.arc(f.x, f.y, size, 0, TWO_PI); ctx.fill(); 
+                if (level > 8) { ctx.globalAlpha = 0.3; ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(f.x, f.y, size + 3, 0, TWO_PI); ctx.fill(); ctx.globalAlpha = 1.0; } 
+            });
+
             gameData.mines.forEach((m) => {
-                if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) { ctx.fillStyle = "rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, Math.PI * 2); ctx.fill(); }
+                if (m.x < viewLeft || m.x > viewRight || m.y < viewTop || m.y > viewBottom) return; // Culling
+                if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) { ctx.fillStyle = "rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, TWO_PI); ctx.fill(); }
                 const r = 25; const d = r * 2;
-                if (m.type === "bosnian") { ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = "#002395"; ctx.fillRect(m.x-r, m.y-r, r*2, r*2); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(m.x, m.y, r/2, 0, Math.PI*2); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#FFD700"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.stroke(); return; }
-                ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3); ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3); ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(m.x - 10, m.y - 10); ctx.lineTo(m.x, m.y - 10); ctx.lineTo(m.x, m.y + 5); ctx.lineTo(m.x - 5, m.y + 12); ctx.lineTo(m.x - 10, m.y + 5); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#333"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.stroke();
+                if (m.type === "bosnian") { ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#002395"; ctx.fillRect(m.x-r, m.y-r, r*2, r*2); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(m.x, m.y, r/2, 0, TWO_PI); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#FFD700"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke(); return; }
+                ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3); ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3); ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(m.x - 10, m.y - 10); ctx.lineTo(m.x, m.y - 10); ctx.lineTo(m.x, m.y + 5); ctx.lineTo(m.x - 5, m.y + 12); ctx.lineTo(m.x - 10, m.y + 5); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#333"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke();
             });
 
             const allEntities = [...gameData.players, ...gameData.enemies];
             allEntities.forEach((p) => {
                 if (p.dead || p.alive === false) return;
-                if (p.frozenUntil && Date.now() < p.frozenUntil) { ctx.shadowBlur = 15; ctx.shadowColor = "cyan"; } else if (p.country === "soviet" && p.abilityActive) { ctx.shadowBlur = 30; ctx.shadowColor = "#FF0000"; } else if (p.country === "golden_maple" && p.maplePhase === "harvest") { ctx.shadowBlur = 40; ctx.shadowColor = "#DAA520"; ctx.strokeStyle = "rgba(218, 165, 32, 0.4)"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(p.x, p.y, 5 * CELL, 0, Math.PI * 2); ctx.stroke(); }
-                if (p.country === "bosnian_kingdom" && p.kingdomPhase === "active") { ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, 300, 0, Math.PI*2); ctx.strokeStyle = "rgba(0, 35, 149, 0.6)"; ctx.lineWidth = 10; ctx.stroke(); ctx.fillStyle = "rgba(0, 35, 149, 0.2)"; ctx.fill(); ctx.restore(); }
-                const bodyW = p.scale || p.width || 12; ctx.lineWidth = bodyW * 1.2; ctx.strokeStyle = (p.frozenUntil && Date.now() < p.frozenUntil) ? "cyan" : (p.colorBody || p.color || "white"); ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); if (p.body.length) { ctx.moveTo(p.body[0].x, p.body[0].y); p.body.forEach(b => ctx.lineTo(b.x, b.y)); ctx.stroke(); } ctx.shadowBlur = 0;
-                const r = bodyW * 0.65; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle + Math.PI / 2); ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.clip();
+                // Culling Check (Aggressive but safe due to padding)
+                if (p.x < viewLeft - p.length && p.x > viewRight + p.length && p.y < viewTop - p.length && p.y > viewBottom + p.length) return; 
+
+                // OPTIMIZATION: Use manual circles instead of shadowBlur for effects
+                if (p.frozenUntil && Date.now() < p.frozenUntil) { ctx.fillStyle="rgba(0, 255, 255, 0.4)"; ctx.beginPath(); ctx.arc(p.x, p.y, (p.scale||12)+10, 0, TWO_PI); ctx.fill(); } 
+                else if (p.country === "soviet" && p.abilityActive) { ctx.fillStyle="rgba(255, 0, 0, 0.4)"; ctx.beginPath(); ctx.arc(p.x, p.y, (p.scale||12)+20, 0, TWO_PI); ctx.fill(); } 
+                else if (p.country === "golden_maple" && p.maplePhase === "harvest") { ctx.strokeStyle = "rgba(218, 165, 32, 0.4)"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(p.x, p.y, 5 * CELL, 0, TWO_PI); ctx.stroke(); }
+                
+                if (p.country === "bosnian_kingdom" && p.kingdomPhase === "active") { ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, 300, 0, TWO_PI); ctx.strokeStyle = "rgba(0, 35, 149, 0.6)"; ctx.lineWidth = 10; ctx.stroke(); ctx.fillStyle = "rgba(0, 35, 149, 0.2)"; ctx.fill(); ctx.restore(); }
+                
+                const bodyW = p.scale || p.width || 12; ctx.lineWidth = bodyW * 1.2; ctx.strokeStyle = (p.frozenUntil && Date.now() < p.frozenUntil) ? "cyan" : (p.colorBody || p.color || "white"); ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); if (p.body.length) { ctx.moveTo(p.body[0].x, p.body[0].y); p.body.forEach(b => ctx.lineTo(b.x, b.y)); ctx.stroke(); } 
+                const r = bodyW * 0.65; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle + Math.PI / 2); ctx.beginPath(); ctx.arc(0, 0, r, 0, TWO_PI); ctx.clip();
                 drawFlag(ctx, p.country, r, p.color); ctx.restore();
                 if(p.name && zoom > 0.3) { ctx.fillStyle = "white"; ctx.font = `bold ${Math.max(12, r)}px Arial`; ctx.textAlign = "center"; ctx.fillText(p.name, p.x, p.y - r - 10); }
             });
 
-            gameData.explosions.forEach((ex) => { ctx.fillStyle = `rgba(255,69,0,${ex.alpha})`; ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius, 0, Math.PI * 2); ctx.fill(); });
+            gameData.explosions.forEach((ex) => { ctx.fillStyle = `rgba(255,69,0,${ex.alpha})`; ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius, 0, TWO_PI); ctx.fill(); });
             ctx.restore();
         }
 
         function drawFlag(ctx, country, r, fallbackColor) {
             const rect = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
             if (!country) { ctx.fillStyle = fallbackColor || "white"; ctx.fillRect(-r, -r, r * 2, r * 2); return; }
-            if (country === 'bosnia') { rect(-r, -r, r * 2, r * 2, "#002F6C"); ctx.fillStyle = "#FECB00"; ctx.beginPath(); ctx.moveTo(r * 0.2, -r); ctx.lineTo(r * 0.2, r); ctx.lineTo(r, -r * 0.5); ctx.fill(); ctx.fillStyle = "white"; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.6 + i * r * 0.4, r * 0.1, 0, Math.PI * 2); ctx.fill(); } }
-            else if (country === 'bosnian_kingdom') { rect(-r, -r, r * 2, r * 2, "#002395"); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(-r, -r); ctx.lineTo(r, r); ctx.lineTo(r, r-r/2); ctx.lineTo(-r+r/2, -r); ctx.fill(); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r/2, r/2, r/4, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(r/2, -r/2, r/4, 0, Math.PI*2); ctx.fill(); }
+            if (country === 'bosnia') { rect(-r, -r, r * 2, r * 2, "#002F6C"); ctx.fillStyle = "#FECB00"; ctx.beginPath(); ctx.moveTo(r * 0.2, -r); ctx.lineTo(r * 0.2, r); ctx.lineTo(r, -r * 0.5); ctx.fill(); ctx.fillStyle = "white"; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.6 + i * r * 0.4, r * 0.1, 0, TWO_PI); ctx.fill(); } }
+            else if (country === 'bosnian_kingdom') { rect(-r, -r, r * 2, r * 2, "#002395"); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(-r, -r); ctx.lineTo(r, r); ctx.lineTo(r, r-r/2); ctx.lineTo(-r+r/2, -r); ctx.fill(); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r/2, r/2, r/4, 0, TWO_PI); ctx.fill(); ctx.beginPath(); ctx.arc(r/2, -r/2, r/4, 0, TWO_PI); ctx.fill(); }
             else if (country === 'russia') { rect(-r, -r, r * 2, (r * 2) / 3, "white"); rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0039A6"); rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "#D52B1E"); }
             else if (country === 'croatia') { rect(-r, -r, r*2, (r*2)/3, "red"); rect(-r, -r+(r*2)/3, r*2, (r*2)/3, "white"); rect(-r, -r+4*r/3, r*2, (r*2)/3, "blue"); ctx.fillStyle = "red"; ctx.fillRect(-r/2, -r/2, r, r); ctx.fillStyle = "white"; for(let y=0; y<2; y++) for(let x=0; x<2; x++) { if((x+y)%2===0) ctx.fillRect(-r/2 + x*(r/2), -r/2 + y*(r/2), r/2, r/2); } }
             else if (country === 'serbia') { rect(-r, -r, r * 2, (r * 2) / 3, "#C6363C"); rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0C4076"); rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "white"); }
@@ -1259,8 +1288,8 @@
             else if (country === 'ukraine') { rect(-r, -r, r * 2, r, "#0057B8"); rect(-r, 0, r * 2, r, "#FFD700"); }
             else if (country === 'poland') { rect(-r, -r, r * 2, r, "white"); rect(-r, 0, r * 2, r, "#DC143C"); }
             else if (country === 'canada') { rect(-r, -r, (r * 2) / 4, r * 2, "#FF0000"); rect(-r + (r * 2) / 4, -r, r, r * 2, "white"); rect(r / 2, -r, (r * 2) / 4, r * 2, "#FF0000"); ctx.fillStyle = "#FF0000"; ctx.beginPath(); ctx.moveTo(0, -r * 0.4); ctx.lineTo(r * 0.3, 0); ctx.lineTo(0, r * 0.4); ctx.lineTo(-r * 0.3, 0); ctx.fill(); }
-            else if (country === 'usa') { rect(-r, -r, r * 2, r * 2, "white"); for (let i = 0; i < 7; i++) rect(-r, -r + (i * 2 * r / 7), r * 2, r / 7, "#B22234"); rect(-r, -r, r, r * 0.8, "#3C3B6E"); ctx.fillStyle = "white"; for (let py = 0; py < 3; py++) for (let px = 0; px < 4; px++) { ctx.beginPath(); ctx.arc(-r + 5 + px * (r / 4), -r + 5 + py * (r / 4), 2, 0, Math.PI * 2); ctx.fill(); } }
-            else if (country === 'soviet') { rect(-r, -r, r * 2, r * 2, "#CC0000"); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r * 0.4, -r * 0.4, r * 0.25, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#FFD700"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(-r * 0.4, -r * 0.2, r * 0.2, 0, Math.PI); ctx.stroke(); }
+            else if (country === 'usa') { rect(-r, -r, r * 2, r * 2, "white"); for (let i = 0; i < 7; i++) rect(-r, -r + (i * 2 * r / 7), r * 2, r / 7, "#B22234"); rect(-r, -r, r, r * 0.8, "#3C3B6E"); ctx.fillStyle = "white"; for (let py = 0; py < 3; py++) for (let px = 0; px < 4; px++) { ctx.beginPath(); ctx.arc(-r + 5 + px * (r / 4), -r + 5 + py * (r / 4), 2, 0, TWO_PI); ctx.fill(); } }
+            else if (country === 'soviet') { rect(-r, -r, r * 2, r * 2, "#CC0000"); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r * 0.4, -r * 0.4, r * 0.25, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = "#FFD700"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(-r * 0.4, -r * 0.2, r * 0.2, 0, Math.PI); ctx.stroke(); }
             else if (country === 'golden_maple') { rect(-r, -r, r*2, r*2, "white"); rect(-r, -r, (r*2)/4, r*2, "#FFFF00"); rect(r/2, -r, (r*2)/4, r*2, "#FFFF00"); ctx.fillStyle = "#FFFF00"; ctx.beginPath(); ctx.moveTo(0, -r * 0.4); ctx.lineTo(r * 0.3, 0); ctx.lineTo(0, r * 0.4); ctx.lineTo(-r * 0.3, 0); ctx.fill(); }
             else if (country === 'sweden') { rect(-r, -r, r * 2, r * 2, "#006AA7"); rect(-r, -r * 0.2, r * 2, r * 0.4, "#FECC00"); rect(-r * 0.2, -r, r * 0.4, r * 2, "#FECC00"); }
             else if (country === 'denmark') { rect(-r, -r, r * 2, r * 2, "#C60C30"); rect(-r, -r * 0.2, r * 2, r * 0.4, "white"); rect(-r * 0.2, -r, r * 0.4, r * 2, "white"); }
@@ -1330,8 +1359,10 @@
 
         // --- GLOBAL MOUSE HANDLER TO FIX CHAT FOCUS ---
         window.addEventListener('mousedown', (e) => {
+            const chatContainer = document.getElementById('chat-container');
             const chatInput = document.getElementById('chat-input');
-            if (e.target !== chatInput && document.activeElement === chatInput) {
+            // Only blur if clicking OUTSIDE the chat container entirely
+            if (!chatContainer.contains(e.target) && document.activeElement === chatInput) {
                 chatInput.blur();
             }
         });
@@ -1349,7 +1380,9 @@
             if (code === "Ireland_isgreat") { if(!isSkinUnlocked('ireland')) { updateStats({ unlockSecret: "ireland" }); alert("SUCCESS: Ireland Skin Unlocked!"); renderSkinGrid(); } else alert("Already Unlocked"); } else alert("Invalid Code");
         };
 
-        document.getElementById('chat-input').onkeydown = (e) => {
+        const chatInputEl = document.getElementById('chat-input');
+        chatInputEl.addEventListener('keydown', (e) => {
+            e.stopPropagation(); // Prevent game inputs (like W/A/S/D) from triggering while typing
             if (e.key === 'Enter') {
                 const text = e.target.value;
                 if (text.trim()) {
@@ -1358,11 +1391,10 @@
                 }
                 e.target.value = ''; document.getElementById('game-canvas').focus();
             }
-            // --- FIX: ESCAPE TO BLUR CHAT ---
             if (e.key === 'Escape') {
                 e.target.blur();
             }
-        };
+        });
 
         document.getElementById('btn-admin-open').onclick = () => { showOwnerLogin = true; document.getElementById('owner-login-panel').style.display = 'block'; document.getElementById('owner-password').focus(); };
         document.getElementById('btn-owner-close').onclick = () => { showOwnerLogin = false; document.getElementById('owner-login-panel').style.display = 'none'; };
