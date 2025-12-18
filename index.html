@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -38,8 +39,9 @@
         #spectator-label { position: absolute; top: 20px; width: 100%; text-align: center; font-size: 30px; font-weight: bold; text-shadow: 0px 0px 5px black; display: none; color: cyan; letter-spacing: 2px; pointer-events: none; }
 
         /* --- MENU SYSTEM --- */
-        #menu-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 15px; height: 700px; pointer-events: auto; z-index: 200; }
-        .panel { background: rgba(0, 15, 60, 0.85); backdrop-filter: blur(20px); border: 2px solid #FECB00; border-radius: 10px; box-shadow: 0 0 40px rgba(0, 47, 108, 0.5); display: flex; flex-direction: column; padding: 25px; }
+        /* FIX: Ensure pointer events are auto for the menu container and its children */
+        #menu-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 15px; height: 700px; pointer-events: auto !important; z-index: 200; }
+        .panel { background: rgba(0, 15, 60, 0.85); backdrop-filter: blur(20px); border: 2px solid #FECB00; border-radius: 10px; box-shadow: 0 0 40px rgba(0, 47, 108, 0.5); display: flex; flex-direction: column; padding: 25px; pointer-events: auto !important; }
         #stats-panel { width: 240px; background: rgba(0, 35, 149, 0.6); border: 1px solid rgba(254, 203, 0, 0.3); }
         #leaderboard-panel { width: 250px; background: rgba(0, 35, 149, 0.6); border: 1px solid rgba(254, 203, 0, 0.3); }
         #main-menu { width: 520px; overflow-y: auto; position: relative; }
@@ -49,9 +51,11 @@
         .row { display: flex; justify-content: space-between; font-size: 14px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
 
         /* --- FORM ELEMENTS --- */
-        input[type="text"], input[type="password"] { background: rgba(255,255,255,0.1); border: 1px solid #444; color: white; font-size: 16px; width: 100%; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 15px; outline: none; box-sizing: border-box; transition: background 0.2s, border 0.2s; }
+        /* FIX: Explicit pointer events for inputs and buttons */
+        input[type="text"], input[type="password"] { background: rgba(255,255,255,0.1); border: 1px solid #444; color: white; font-size: 16px; width: 100%; padding: 15px; text-align: center; border-radius: 5px; margin-bottom: 15px; outline: none; box-sizing: border-box; transition: background 0.2s, border 0.2s; pointer-events: auto !important; }
         input[type="text"]:focus, input[type="password"]:focus { background: rgba(255,255,255,0.2); border-color: #FECB00; }
-        button { border: none; border-radius: 5px; font-weight: bold; cursor: pointer; text-transform: uppercase; transition: transform 0.1s, box-shadow 0.1s; }
+        
+        button { border: none; border-radius: 5px; font-weight: bold; cursor: pointer; text-transform: uppercase; transition: transform 0.1s, box-shadow 0.1s; pointer-events: auto !important; }
         .btn-primary { width: 100%; padding: 18px; background: linear-gradient(to right, #002F6C, #0055A4); color: white; font-size: 16px; margin-top: 10px; box-shadow: 0 4px 0 rgba(0,0,0,0.3); }
         .btn-primary:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.3); }
         .btn-redeem { width: 100%; padding: 10px; background: linear-gradient(to right, #C6363C, #800000); color: white; font-size: 12px; margin-top: 5px; }
@@ -59,8 +63,8 @@
         .btn-toggle.active { background: #FECB00; color: black; box-shadow: 0 0 10px #FECB00; }
 
         /* --- SKIN GRID --- */
-        #skin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; overflow-y: auto; flex: 1; margin-bottom: 20px; min-height: 250px; padding-right: 5px; }
-        .skin-tile { background: rgba(255,255,255,0.05); border: 1px solid #333; border-radius: 5px; padding: 15px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; transition: all 0.2s; }
+        #skin-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; overflow-y: auto; flex: 1; margin-bottom: 20px; min-height: 250px; padding-right: 5px; pointer-events: auto !important; }
+        .skin-tile { background: rgba(255,255,255,0.05); border: 1px solid #333; border-radius: 5px; padding: 15px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; transition: all 0.2s; pointer-events: auto; }
         .skin-tile:hover { background: rgba(255,255,255,0.1); }
         .skin-tile.selected { background: rgba(254, 203, 0, 0.2); border-color: #FECB00; box-shadow: 0 0 10px rgba(254, 203, 0, 0.2); }
         .skin-tile.locked { opacity: 0.6; cursor: not-allowed; filter: grayscale(0.8); }
@@ -68,13 +72,13 @@
         .lock-text { font-size: 9px; color: #ff5555; font-weight: bold; margin-top: 5px; text-align: center; text-transform: uppercase; }
 
         /* --- CHAT SYSTEM --- */
-        #chat-container { position: absolute; bottom: 10px; left: 10px; width: 320px; height: 250px; display: none; flex-direction: column; pointer-events: auto; z-index: 200; }
-        #chat-messages { flex: 1; overflow-y: hidden; display: flex; flex-direction: column; justify-content: flex-end; text-shadow: 1px 1px 2px black; margin-bottom: 5px; padding-right: 5px; }
+        #chat-container { position: absolute; bottom: 10px; left: 10px; width: 320px; height: 250px; display: none; flex-direction: column; pointer-events: auto !important; z-index: 200; }
+        #chat-messages { flex: 1; overflow-y: hidden; display: flex; flex-direction: column; justify-content: flex-end; text-shadow: 1px 1px 2px black; margin-bottom: 5px; padding-right: 5px; pointer-events: none; }
         .chat-line { font-size: 14px; margin-bottom: 4px; background: rgba(0,0,0,0.4); padding: 4px 8px; border-radius: 4px; word-wrap: break-word; }
-        #chat-input { background: rgba(0,0,0,0.6); border: 1px solid #555; color: white; padding: 10px; border-radius: 4px; outline: none; width: 100%; box-sizing: border-box; pointer-events: auto; }
+        #chat-input { background: rgba(0,0,0,0.6); border: 1px solid #555; color: white; padding: 10px; border-radius: 4px; outline: none; width: 100%; box-sizing: border-box; pointer-events: auto !important; }
 
         /* --- SPECTATE LIST --- */
-        #spectate-list { max-height: 140px; overflow-y: auto; }
+        #spectate-list { max-height: 140px; overflow-y: auto; pointer-events: auto !important; }
         .spectate-row { padding: 12px; background: #222; margin-bottom: 5px; border-radius: 5px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.2s; }
         .spectate-row:hover { background: #333; }
         .server-official { border: 1px solid #FECB00; background: rgba(254, 203, 0, 0.1); }
@@ -85,12 +89,12 @@
         .death-sub { font-size: 24px; color: #ccc; text-shadow: 1px 1px 0 #000; }
 
         /* --- OWNER / CHEAT PANELS --- */
-        #owner-login-panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.95); padding: 30px; border: 2px solid red; z-index: 999; display: none; width: 300px; box-shadow: 0 0 50px red; text-align: center; pointer-events: auto; }
-        #owner-control-panel { position: absolute; top: 60px; left: 10px; width: 180px; background: rgba(0,0,0,0.85); padding: 15px; border: 2px solid red; color: white; z-index: 999; display: none; box-shadow: 0 0 20px red; pointer-events: auto; }
+        #owner-login-panel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.95); padding: 30px; border: 2px solid red; z-index: 999; display: none; width: 300px; box-shadow: 0 0 50px red; text-align: center; pointer-events: auto !important; }
+        #owner-control-panel { position: absolute; top: 60px; left: 10px; width: 180px; background: rgba(0,0,0,0.85); padding: 15px; border: 2px solid red; color: white; z-index: 999; display: none; box-shadow: 0 0 20px red; pointer-events: auto !important; }
         .cheat-btn { display: block; width: 100%; padding: 10px; margin-bottom: 8px; background: #330000; color: red; border: 1px solid red; font-size: 11px; font-weight: bold; cursor: pointer; }
         .cheat-btn:hover { background: red; color: black; }
         #cheat-msg { text-align: center; color: cyan; font-weight: bold; margin-top: 10px; font-size: 12px; height: 20px; }
-        #btn-admin-open { position: absolute; bottom: 10px; right: 10px; font-size: 10px; padding: 5px 10px; background: #333; color: #555; border: 1px solid #444; cursor: pointer; pointer-events: auto; }
+        #btn-admin-open { position: absolute; bottom: 10px; right: 10px; font-size: 10px; padding: 5px 10px; background: #333; color: #555; border: 1px solid #444; cursor: pointer; pointer-events: auto !important; }
         #btn-admin-open:hover { color: red; border-color: red; }
 
         /* Scrollbar styling */
@@ -176,7 +180,7 @@
             <div id="leaderboard-panel" class="panel">
                 <div class="header-text">Top 5</div>
                 <div id="leaderboard-content">
-                    <div style="text-align: center; color: #888; margin-top: 20px;">Loading...</div>
+                    <div style="text-align: center; color: #888; margin-top: 20px;">Connecting...</div>
                 </div>
             </div>
         </div>
@@ -220,7 +224,8 @@
     <script type="module">
         // ERROR HANDLER: If the script fails, this will tell you why on the screen.
         window.onerror = function(message, source, lineno, colno, error) {
-            alert("Script Error:\n" + message + "\nLine: " + lineno);
+            console.error(message, lineno);
+            // We don't alert here to avoid spamming if it's a non-critical error
         };
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
@@ -257,6 +262,9 @@
 
         let app, db, auth;
         let authReady = false;
+        
+        // --- SAFE INITIALIZATION WRAPPER ---
+        // We wrap Firebase Init in a try/catch so if it fails (e.g. network blocked), the game still works offline
         try {
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
@@ -266,11 +274,13 @@
                 authReady = true;
                 startScanner();
             }).catch(err => {
-                console.error("Auth Error:", err);
-                alert("Game Server Connection Failed: " + err.message);
+                console.warn("Auth Error:", err);
+                document.getElementById('scan-status').innerText = "(Offline Mode)";
+                document.getElementById('spectate-list').innerHTML = '<div style="color:#666; font-size:12px; font-style:italic; padding:10px;">Network unavailable. Play Solo.</div>';
             });
         } catch(e) {
             console.error("Firebase Init Failed", e);
+            document.getElementById('scan-status').innerText = "(Offline Mode)";
         }
 
         const OWNER_PASSWORD = "Roblox13_isme";
@@ -516,29 +526,56 @@
         }
 
         function initSinglePlayer() {
-            if (peer) peer.destroy();
-            peer = new Peer({ debug: 1 });
-            peer.on('open', (id) => {
-                currentState.myId = id; currentState.isHost = true; currentState.isDedicatedServer = false; currentState.isSpectating = false; currentState.isPlayingClient = false; currentState.myPlayerIndex = 0; currentState.menu = 'playing';
-                if(authReady) {
-                    const docRef = doc(db, "active_games", id);
-                    const publish = () => setDoc(docRef, { host: currentState.playerName, lastBeat: serverTimestamp(), type: 'public' }).catch(e => console.warn("Presence err", e));
-                    publish(); const hb = setInterval(publish, 5000); peer.on('disconnected', () => clearInterval(hb));
+            try {
+                if (peer) peer.destroy();
+                // If PeerJS fails, we fallback to local
+                try {
+                    peer = new Peer({ debug: 1 });
+                } catch(e) {
+                    console.log("PeerJS init failed, running purely local");
+                    startLocalGame();
+                    return;
                 }
-                updateStats({ game: true });
-                updateHUDXP(); 
-                gameData.mode = "single";
-                const startSize = getStartScale();
-                gameData.players = [{
-                    id: 0, active: true, x: 0, y: 0, angle: -Math.PI / 2, body: [], length: 140, dead: false, country: currentState.selectedSkin, colorBody: SKIN_BODY_COLORS[currentState.selectedSkin], scale: startSize, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, minesExplodedCurrentGame: 0, name: currentState.playerName
-                }];
-                resetWorld(true); toggleUI('playing'); addChatMessage("System", "Welcome to Single Player! Room ID: " + id, "lime");
+
+                peer.on('open', (id) => {
+                    startLocalGame(id);
+                    if(authReady) {
+                        const docRef = doc(db, "active_games", id);
+                        const publish = () => setDoc(docRef, { host: currentState.playerName, lastBeat: serverTimestamp(), type: 'public' }).catch(e => console.warn("Presence err", e));
+                        publish(); const hb = setInterval(publish, 5000); peer.on('disconnected', () => clearInterval(hb));
+                    }
+                });
+
+                peer.on('error', (err) => {
+                     console.warn("Peer Error", err);
+                     startLocalGame(); // Fallback
+                });
+            } catch(e) {
+                console.error("Single Player Init Error", e);
+                startLocalGame();
+            }
+        }
+
+        function startLocalGame(id = "OFFLINE") {
+             currentState.myId = id; currentState.isHost = true; currentState.isDedicatedServer = false; currentState.isSpectating = false; currentState.isPlayingClient = false; currentState.myPlayerIndex = 0; currentState.menu = 'playing';
+            updateStats({ game: true });
+            updateHUDXP(); 
+            gameData.mode = "single";
+            const startSize = getStartScale();
+            gameData.players = [{
+                id: 0, active: true, x: 0, y: 0, angle: -Math.PI / 2, body: [], length: 140, dead: false, country: currentState.selectedSkin, colorBody: SKIN_BODY_COLORS[currentState.selectedSkin], scale: startSize, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, minesExplodedCurrentGame: 0, name: currentState.playerName
+            }];
+            resetWorld(true); toggleUI('playing'); 
+            addChatMessage("System", "Game Started! Room: " + id, "lime");
+
+            // Setup listeners if peer exists
+            if(peer) {
                 peer.on('connection', (conn) => {
                     connections.push(conn);
                     conn.on('data', (data) => { if (data.type === "CHAT") { const msg = { name: data.name, text: data.text, color: "#aaa" }; addChatMessage(msg.name, msg.text, msg.color); broadcastChat(msg); playSound("chat"); } });
                     conn.on('close', () => { connections = connections.filter(c => c !== conn); });
                 });
-            });
+            }
         }
 
         let nextPlayerId = 1;
@@ -1314,7 +1351,11 @@
 
         async function startScanner() {
             const scan = async () => {
-                if(!authReady) return;
+                // If Auth isn't ready, we don't try to query DB
+                if(!authReady || !db) {
+                    document.getElementById('leaderboard-content').innerHTML = '<div style="text-align:center;color:#666;">Offline Mode</div>';
+                    return;
+                }
                 try {
                     const q = query(collection(db, "active_games"), orderBy("lastBeat", "desc"), limit(20));
                     const snap = await getDocs(q);
@@ -1335,12 +1376,14 @@
                         }
                     });
                     if (found === 0) list.innerHTML = '<div style="color:#666; font-size:12px; font-style:italic; padding:10px;">No active games found. Start one!</div>';
+                    
+                    // Leaderboard Scan
+                     onSnapshot(query(collection(db, "leaderboard"), orderBy("size", "desc"), limit(5)), (snap) => { const div = document.getElementById('leaderboard-content'); div.innerHTML = ''; snap.docs.forEach((d, i) => { const r = document.createElement('div'); r.className = 'row'; r.innerHTML = `<span style="color:${i === 0 ? '#FECB00' : 'white'}">${i + 1}. ${d.data().name}</span> <span style="color:#4caf50">${Math.round(d.data().size)}</span>`; div.appendChild(r); }); });
+
                 } catch(e) { console.warn("Scanner error", e); }
             };
             scan();
             setInterval(scan, 10000);
-            try { onSnapshot(query(collection(db, "leaderboard"), orderBy("size", "desc"), limit(5)), (snap) => { const div = document.getElementById('leaderboard-content'); div.innerHTML = ''; snap.docs.forEach((d, i) => { const r = document.createElement('div'); r.className = 'row'; r.innerHTML = `<span style="color:${i === 0 ? '#FECB00' : 'white'}">${i + 1}. ${d.data().name}</span> <span style="color:#4caf50">${Math.round(d.data().size)}</span>`; div.appendChild(r); }); });
-            } catch(e) { console.log("LB pending"); }
         }
 
         function addChatMessage(name, text, color) { const container = document.getElementById('chat-messages');
@@ -1360,52 +1403,68 @@
                 chatInput.blur();
             }
         });
-        document.getElementById('btn-play').onclick = initSinglePlayer;
-        document.getElementById('btn-mouse').onclick = () => { currentState.controlMode = 'mouse'; document.getElementById('btn-mouse').classList.add('active'); document.getElementById('btn-keyboard').classList.remove('active'); };
-        document.getElementById('btn-keyboard').onclick = () => { currentState.controlMode = 'keyboard'; document.getElementById('btn-keyboard').classList.add('active'); document.getElementById('btn-mouse').classList.remove('active'); };
-        document.getElementById('cat-normal').onclick = () => { currentState.skinCategory = 'normal'; document.getElementById('cat-normal').classList.add('active');
-        document.getElementById('cat-special').classList.remove('active'); renderSkinGrid(); };
-        document.getElementById('cat-special').onclick = () => { currentState.skinCategory = 'special'; document.getElementById('cat-special').classList.add('active'); document.getElementById('cat-normal').classList.remove('active'); renderSkinGrid(); };
-        document.getElementById('nickname-input').oninput = (e) => { currentState.playerName = e.target.value; localStorage.setItem('bosnia_snake_username', e.target.value); };
-        document.getElementById('nickname-input').value = currentState.playerName;
-        document.getElementById('btn-redeem').onclick = () => {
-            const code = document.getElementById('redeem-input').value;
-            if (code === "Ireland_isgreat") { if(!isSkinUnlocked('ireland')) { updateStats({ unlockSecret: "ireland" }); alert("SUCCESS: Ireland Skin Unlocked!"); renderSkinGrid(); } else alert("Already Unlocked");
-            } else alert("Invalid Code");
-        };
 
-        const chatInputEl = document.getElementById('chat-input');
-        chatInputEl.addEventListener('keydown', (e) => {
-            e.stopPropagation(); 
-            if (e.key === 'Enter') {
-                const text = e.target.value;
-                if (text.trim()) {
-                    if (currentState.isHost) { const msg = { name: currentState.playerName, text: text, color: "#FECB00" }; addChatMessage(msg.name, msg.text, msg.color); playSound("chat"); broadcastChat(msg); } 
-                    else if (hostConn && hostConn.open) { hostConn.send({ type: "CHAT", name: currentState.playerName, text: text }); if(!currentState.isSpectating) addChatMessage(currentState.playerName, text, "#fff"); }
-                }
-                e.target.value = ''; 
-                document.getElementById('game-canvas').focus();
-            }
-            if (e.key === 'Escape') {
-                e.target.blur();
-            }
-        });
-        document.getElementById('btn-admin-open').onclick = () => { showOwnerLogin = true; document.getElementById('owner-login-panel').style.display = 'block'; document.getElementById('owner-password').focus(); };
-        document.getElementById('btn-owner-close').onclick = () => { showOwnerLogin = false; document.getElementById('owner-login-panel').style.display = 'none'; };
-        document.getElementById('btn-owner-login').onclick = () => { const pass = document.getElementById('owner-password').value; if(pass === OWNER_PASSWORD) { showOwnerLogin = false; document.getElementById('owner-login-panel').style.display = 'none';
-        showOwnerPanel = true; document.getElementById('owner-control-panel').style.display = 'block'; document.getElementById('cheat-msg').innerText = "ACCESS GRANTED"; } else { alert("ACCESS DENIED"); } };
-        const setCheatMsg = (txt) => { const el = document.getElementById('cheat-msg'); el.innerText = txt; setTimeout(() => el.innerText = '', 2000); };
-        document.getElementById('cheat-host-server').onclick = () => { showOwnerPanel = false; document.getElementById('owner-control-panel').style.display = 'none'; initAdminServer(); };
-        document.getElementById('cheat-god').onclick = () => { cheats.godMode = !cheats.godMode; document.getElementById('cheat-god').innerText = "God Mode: " + (cheats.godMode ? "ON" : "OFF");
-        setCheatMsg("God Mode " + (cheats.godMode ? "Enabled" : "Disabled")); };
-        document.getElementById('cheat-speed').onclick = () => { cheats.speedHack = !cheats.speedHack;
-        document.getElementById('cheat-speed').innerText = "Speed Hack: " + (cheats.speedHack ? "ON" : "OFF"); setCheatMsg("Speed " + (cheats.speedHack ? "Boosted" : "Normal")); };
-        document.getElementById('cheat-size').onclick = () => { if(gameData.players[0]) { gameData.players[0].scale = 50; gameData.players[0].length = 500; setCheatMsg("Size Set to 50"); } };
-        document.getElementById('cheat-killbots').onclick = () => { gameData.enemies.forEach(e => { if(e.alive) killEnemy(e, null); }); setCheatMsg("Bots Cleared"); };
-        document.getElementById('cheat-reset').onclick = () => { resetWorld(true); setCheatMsg("World Reset"); };
+        // --- SAFE BINDING FUNCTION (Ensures buttons work even if imports hang) ---
+        function setupEventListeners() {
+            try {
+                const btnPlay = document.getElementById('btn-play');
+                if(btnPlay) btnPlay.onclick = initSinglePlayer;
+                
+                document.getElementById('btn-mouse').onclick = () => { currentState.controlMode = 'mouse'; document.getElementById('btn-mouse').classList.add('active'); document.getElementById('btn-keyboard').classList.remove('active'); };
+                document.getElementById('btn-keyboard').onclick = () => { currentState.controlMode = 'keyboard'; document.getElementById('btn-keyboard').classList.add('active'); document.getElementById('btn-mouse').classList.remove('active'); };
+                document.getElementById('cat-normal').onclick = () => { currentState.skinCategory = 'normal'; document.getElementById('cat-normal').classList.add('active');
+                document.getElementById('cat-special').classList.remove('active'); renderSkinGrid(); };
+                document.getElementById('cat-special').onclick = () => { currentState.skinCategory = 'special'; document.getElementById('cat-special').classList.add('active'); document.getElementById('cat-normal').classList.remove('active'); renderSkinGrid(); };
+                document.getElementById('nickname-input').oninput = (e) => { currentState.playerName = e.target.value; localStorage.setItem('bosnia_snake_username', e.target.value); };
+                document.getElementById('nickname-input').value = currentState.playerName;
+                document.getElementById('btn-redeem').onclick = () => {
+                    const code = document.getElementById('redeem-input').value;
+                    if (code === "Ireland_isgreat") { if(!isSkinUnlocked('ireland')) { updateStats({ unlockSecret: "ireland" }); alert("SUCCESS: Ireland Skin Unlocked!"); renderSkinGrid(); } else alert("Already Unlocked");
+                    } else alert("Invalid Code");
+                };
 
+                const chatInputEl = document.getElementById('chat-input');
+                chatInputEl.addEventListener('keydown', (e) => {
+                    e.stopPropagation(); 
+                    if (e.key === 'Enter') {
+                        const text = e.target.value;
+                        if (text.trim()) {
+                            if (currentState.isHost) { const msg = { name: currentState.playerName, text: text, color: "#FECB00" }; addChatMessage(msg.name, msg.text, msg.color); playSound("chat"); broadcastChat(msg); } 
+                            else if (hostConn && hostConn.open) { hostConn.send({ type: "CHAT", name: currentState.playerName, text: text }); if(!currentState.isSpectating) addChatMessage(currentState.playerName, text, "#fff"); }
+                        }
+                        e.target.value = ''; 
+                        document.getElementById('game-canvas').focus();
+                    }
+                    if (e.key === 'Escape') {
+                        e.target.blur();
+                    }
+                });
+                document.getElementById('btn-admin-open').onclick = () => { showOwnerLogin = true; document.getElementById('owner-login-panel').style.display = 'block'; document.getElementById('owner-password').focus(); };
+                document.getElementById('btn-owner-close').onclick = () => { showOwnerLogin = false; document.getElementById('owner-login-panel').style.display = 'none'; };
+                document.getElementById('btn-owner-login').onclick = () => { const pass = document.getElementById('owner-password').value; if(pass === OWNER_PASSWORD) { showOwnerLogin = false; document.getElementById('owner-login-panel').style.display = 'none';
+                showOwnerPanel = true; document.getElementById('owner-control-panel').style.display = 'block'; document.getElementById('cheat-msg').innerText = "ACCESS GRANTED"; } else { alert("ACCESS DENIED"); } };
+                const setCheatMsg = (txt) => { const el = document.getElementById('cheat-msg'); el.innerText = txt; setTimeout(() => el.innerText = '', 2000); };
+                document.getElementById('cheat-host-server').onclick = () => { showOwnerPanel = false; document.getElementById('owner-control-panel').style.display = 'none'; initAdminServer(); };
+                document.getElementById('cheat-god').onclick = () => { cheats.godMode = !cheats.godMode; document.getElementById('cheat-god').innerText = "God Mode: " + (cheats.godMode ? "ON" : "OFF");
+                setCheatMsg("God Mode " + (cheats.godMode ? "Enabled" : "Disabled")); };
+                document.getElementById('cheat-speed').onclick = () => { cheats.speedHack = !cheats.speedHack;
+                document.getElementById('cheat-speed').innerText = "Speed Hack: " + (cheats.speedHack ? "ON" : "OFF"); setCheatMsg("Speed " + (cheats.speedHack ? "Boosted" : "Normal")); };
+                document.getElementById('cheat-size').onclick = () => { if(gameData.players[0]) { gameData.players[0].scale = 50; gameData.players[0].length = 500; setCheatMsg("Size Set to 50"); } };
+                document.getElementById('cheat-killbots').onclick = () => { gameData.enemies.forEach(e => { if(e.alive) killEnemy(e, null); }); setCheatMsg("Bots Cleared"); };
+                document.getElementById('cheat-reset').onclick = () => { resetWorld(true); setCheatMsg("World Reset"); };
+
+                console.log("UI Bindings Complete");
+            } catch(e) {
+                console.error("Failed to bind UI events:", e);
+            }
+        }
+
+        // Initialize UI immediately
+        setupEventListeners();
         updateStatsUI();
         renderSkinGrid();
+        
+        // Start Loop
         requestAnimationFrame(loop);
 
         console.log("Bosnia Snake Ultimate Loaded. Admin Access Ready.");
@@ -1413,3 +1472,4 @@
     </script>
 </body>
 </html>
+```
