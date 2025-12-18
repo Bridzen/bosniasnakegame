@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: Kingdom Update</title>
+    <title>Bosnia Snake: High Graphics Update</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -1197,9 +1197,9 @@
                     playSound("soviet_boom");
                     
                     // --- NEW LOGIC: SINGLE BIG BOMB (Updated) ---
-                    // Fuse Calculation: Size 100 = 1 sec, Size 300 = 3 sec.
-                    // Math: Size * 0.01 seconds -> Size * 10 milliseconds
-                    const fuseMs = Math.max(1000, p.scale * 10); 
+                    // Fuse Calculation: Size 100 = 2 sec.
+                    // Multiplier changed to 0.02 (20ms per size unit)
+                    const fuseMs = Math.max(1000, p.scale * 20); 
                     
                     // Explosion Radius: Proportional to size
                     const blastRadius = p.scale * 8;
@@ -1209,7 +1209,8 @@
                         y: p.y, 
                         state: "kingdom_fuse", // New state for this bomb
                         type: "bosnian_nuke", 
-                        ownerId: p.id, 
+                        ownerId: p.id,
+                        dropSize: p.scale, // Store current head size for rendering
                         fuseEnd: now + fuseMs,
                         maxRadius: blastRadius,
                         lastTick: now 
@@ -1515,20 +1516,27 @@
                 if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) { ctx.fillStyle = "rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, TWO_PI); ctx.fill(); }
                 const r = 25; const d = r * 2;
 
-                // --- NEW: RENDER THE NUKE VISUAL ---
+                // --- NEW: RENDER THE NUKE VISUAL (SCALED & PULSING) ---
                 if (m.type === "bosnian_nuke") {
                      const pulse = (Date.now() % 500) / 500;
-                     const size = 30 + (pulse * 10);
+                     // SIZE IS NOW PROPORTIONAL TO PLAYER SIZE WHEN DROPPED
+                     const baseSize = m.dropSize || 30;
+                     const size = baseSize * (0.9 + pulse * 0.2);
+                     
                      ctx.fillStyle = pulse > 0.5 ? "red" : "#FFD700";
                      ctx.beginPath(); ctx.arc(m.x, m.y, size, 0, TWO_PI); ctx.fill();
                      if (m.fuseEnd) {
                          const left = Math.max(0, (m.fuseEnd - Date.now()) / 1000).toFixed(1);
-                         ctx.fillStyle = "white"; ctx.font = "bold 20px Arial"; ctx.fillText(left + "s", m.x - 20, m.y - 40);
+                         ctx.fillStyle = "white"; 
+                         ctx.font = `bold ${Math.max(16, baseSize/1.5)}px Arial`; 
+                         ctx.textAlign = "center";
+                         ctx.fillText(left + "s", m.x, m.y - size - 10);
                      }
-                     ctx.strokeStyle = "rgba(255, 0, 0, 0.2)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, m.maxRadius, 0, TWO_PI); ctx.stroke();
+                     // Show blast radius
+                     ctx.strokeStyle = "rgba(255, 0, 0, 0.3)"; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(m.x, m.y, m.maxRadius, 0, TWO_PI); ctx.stroke();
                      return;
                 }
-                // -----------------------------------
+                // -----------------------------------------------------
 
                 if (m.type === "bosnian") { ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#002395"; ctx.fillRect(m.x-r, m.y-r, r*2, r*2); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(m.x, m.y, r/2, 0, TWO_PI); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#FFD700"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke(); return; }
                 ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3); ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3); ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(m.x - 10, m.y - 10); ctx.lineTo(m.x, m.y - 10); ctx.lineTo(m.x, m.y + 5); ctx.lineTo(m.x - 5, m.y + 12); ctx.lineTo(m.x - 10, m.y + 5); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#333"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke();
@@ -1550,7 +1558,26 @@
                 if(p.name && zoom > 0.3) { ctx.fillStyle = "white"; ctx.font = `bold ${Math.max(12, r)}px Arial`; ctx.textAlign = "center"; ctx.fillText(p.name, p.x, p.y - r - 10); }
             });
 
-            gameData.explosions.forEach((ex) => { ctx.fillStyle = `rgba(255,69,0,${ex.alpha})`; ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius, 0, TWO_PI); ctx.fill(); });
+            // --- HIGH GRAPHICS EXPLOSION RENDERING ---
+            gameData.explosions.forEach((ex) => { 
+                // Radial Gradient for Fire Effect
+                const gradient = ctx.createRadialGradient(ex.x, ex.y, 0, ex.x, ex.y, ex.radius);
+                gradient.addColorStop(0, `rgba(255, 255, 200, ${ex.alpha})`); // White hot center
+                gradient.addColorStop(0.3, `rgba(255, 165, 0, ${ex.alpha})`); // Orange body
+                gradient.addColorStop(0.7, `rgba(255, 0, 0, ${ex.alpha * 0.8})`); // Red edge
+                gradient.addColorStop(1, `rgba(50, 0, 0, 0)`); // Dark fade out
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius, 0, TWO_PI); ctx.fill(); 
+                
+                // Shockwave Ring
+                if (ex.radius > 50) {
+                    ctx.strokeStyle = `rgba(255, 200, 50, ${ex.alpha * 0.5})`;
+                    ctx.lineWidth = 10;
+                    ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius * 0.9, 0, TWO_PI); ctx.stroke();
+                }
+            });
+            // -----------------------------------------
             
             for(let i = floatingTexts.length - 1; i >= 0; i--) {
                 let ft = floatingTexts[i]; ft.y += ft.dy; ft.life -= 0.02;
