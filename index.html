@@ -9,12 +9,16 @@
     <style>
         /* --- GLOBAL STYLES --- */
         body { margin: 0; overflow: hidden; background-color: #080b12; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; user-select: none; -webkit-user-select: none; }
-        #game-canvas { display: block; width: 100vw; height: 100vh; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        
+        /* FIX: Canvas at 0, UI at 100 to ensure buttons work */
+        #game-canvas { display: block; width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 0; }
+        
+        /* FIX: UI Layer allows clicks to pass through, but children (buttons) capture them */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 100; }
         .pointer-events-auto { pointer-events: auto; }
 
         /* --- HEADS UP DISPLAY (HUD) --- */
-        #hud { position: absolute; top: 20px; left: 20px; width: 240px; height: 85px; background: rgba(0, 15, 60, 0.7); border: 2px solid #0055A4; border-radius: 10px; display: none; flex-direction: column; justify-content: center; padding: 10px 15px; box-sizing: border-box; backdrop-filter: blur(5px); box-shadow: 0 0 15px rgba(0, 85, 164, 0.4); }
+        #hud { position: absolute; top: 20px; left: 20px; width: 240px; height: 85px; background: rgba(0, 15, 60, 0.7); border: 2px solid #0055A4; border-radius: 10px; display: none; flex-direction: column; justify-content: center; padding: 10px 15px; box-sizing: border-box; backdrop-filter: blur(5px); box-shadow: 0 0 15px rgba(0, 85, 164, 0.4); pointer-events: none; }
         #hud-top-row { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 5px; }
         #hud-size { font-weight: bold; font-size: 22px; text-shadow: 1px 1px 2px black; }
         #hud-kills { font-weight: bold; font-size: 16px; color: #FECB00; text-shadow: 1px 1px 2px black; }
@@ -26,15 +30,15 @@
         #level-badge { font-size: 12px; color: cyan; font-weight: bold; margin-top: 2px; text-align: center; }
 
         /* --- ABILITY INDICATOR --- */
-        #ability-indicator { position: absolute; bottom: 30px; right: 30px; width: 80px; height: 80px; background: rgba(0,0,0,0.6); border-radius: 50%; display: none; justify-content: center; align-items: center; flex-direction: column; border: 4px solid #555; transition: border-color 0.3s; }
+        #ability-indicator { position: absolute; bottom: 30px; right: 30px; width: 80px; height: 80px; background: rgba(0,0,0,0.6); border-radius: 50%; display: none; justify-content: center; align-items: center; flex-direction: column; border: 4px solid #555; transition: border-color 0.3s; pointer-events: none; }
         #ability-text { font-weight: bold; font-size: 14px; color: white; }
         #ability-sub { font-size: 10px; color: #ddd; }
 
         /* --- SPECTATOR LABEL --- */
-        #spectator-label { position: absolute; top: 20px; width: 100%; text-align: center; font-size: 30px; font-weight: bold; text-shadow: 0px 0px 5px black; display: none; color: cyan; letter-spacing: 2px; }
+        #spectator-label { position: absolute; top: 20px; width: 100%; text-align: center; font-size: 30px; font-weight: bold; text-shadow: 0px 0px 5px black; display: none; color: cyan; letter-spacing: 2px; pointer-events: none; }
 
         /* --- MENU SYSTEM --- */
-        #menu-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 15px; height: 700px; pointer-events: auto; z-index: 20; }
+        #menu-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 15px; height: 700px; pointer-events: auto; z-index: 200; }
         .panel { background: rgba(0, 15, 60, 0.85); backdrop-filter: blur(20px); border: 2px solid #FECB00; border-radius: 10px; box-shadow: 0 0 40px rgba(0, 47, 108, 0.5); display: flex; flex-direction: column; padding: 25px; }
         #stats-panel { width: 240px; background: rgba(0, 35, 149, 0.6); border: 1px solid rgba(254, 203, 0, 0.3); }
         #leaderboard-panel { width: 250px; background: rgba(0, 35, 149, 0.6); border: 1px solid rgba(254, 203, 0, 0.3); }
@@ -64,7 +68,7 @@
         .lock-text { font-size: 9px; color: #ff5555; font-weight: bold; margin-top: 5px; text-align: center; text-transform: uppercase; }
 
         /* --- CHAT SYSTEM --- */
-        #chat-container { position: absolute; bottom: 10px; left: 10px; width: 320px; height: 250px; display: none; flex-direction: column; pointer-events: auto; z-index: 100; }
+        #chat-container { position: absolute; bottom: 10px; left: 10px; width: 320px; height: 250px; display: none; flex-direction: column; pointer-events: auto; z-index: 200; }
         #chat-messages { flex: 1; overflow-y: hidden; display: flex; flex-direction: column; justify-content: flex-end; text-shadow: 1px 1px 2px black; margin-bottom: 5px; padding-right: 5px; }
         .chat-line { font-size: 14px; margin-bottom: 4px; background: rgba(0,0,0,0.4); padding: 4px 8px; border-radius: 4px; word-wrap: break-word; }
         #chat-input { background: rgba(0,0,0,0.6); border: 1px solid #555; color: white; padding: 10px; border-radius: 4px; outline: none; width: 100%; box-sizing: border-box; pointer-events: auto; }
@@ -214,6 +218,11 @@
     </div>
 
     <script type="module">
+        // ERROR HANDLER: If the script fails, this will tell you why on the screen.
+        window.onerror = function(message, source, lineno, colno, error) {
+            alert("Script Error:\n" + message + "\nLine: " + lineno);
+        };
+
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
         import { 
@@ -284,7 +293,7 @@
             "bosnia", "russia", "germany", "france", "canada", "ukraine", 
             "usa", "uk", "italy", "poland", "sweden", "denmark",
             "spain", "netherlands", "greece", "switzerland", "norway", "finland", "portugal",
-            "turkey", "china" // New Skins Added here
+            "turkey", "china"
         ];
         const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple", "bosnian_kingdom"];
 
@@ -321,7 +330,6 @@
             finland: { type: "kills", val: 40, label: "Kills 40 (Sniper)" },
             portugal: { type: "length", val: 1143, label: "Length 1143 (Year)" },
 
-            // REWARD SKINS
             turkey: { type: "level", val: 4, label: "Reach Level 4" },
             china: { type: "level", val: 6, label: "Reach Level 6" },
 
@@ -390,11 +398,10 @@
             myId: null,
             myPlayerIndex: 0
         };
-        // --- UPDATED STATS FOR PROGRESSION ---
+        
         let userStats = { 
             totalKills: 0, totalDeaths: 0, bestScale: 18, bestLength: 140, 
             gamesPlayed: 0, maxMinesInGame: 0, unlockedSecrets: [],
-            // XP System: Increased Difficulty
             level: 1, currentXP: 0, xpToNext: 1000 
         };
         try { const loaded = localStorage.getItem('bosnia_snake_stats_v2'); if(loaded) userStats = {...userStats, ...JSON.parse(loaded)}; } catch(e) { console.warn("Failed to load stats"); }
@@ -414,7 +421,7 @@
         let floatingTexts = [];
         let gameData = { mode: null, players: [], enemies: [], food: [], mines: [], explosions: [], syrupZones: [], shakeIntensity: 0, gameOver: false };
         function randPosCell() { return Math.floor(Math.random() * GRID) * CELL - WORLD_SIZE / 2; }
-        // --- OPTIMIZATION: Distance Squared ---
+        
         function distSq(a, b) { const dx = a.x - b.x; const dy = a.y - b.y; return dx * dx + dy * dy; }
         function dist(a, b) { return Math.sqrt(distSq(a, b)); }
         function coll(a, b, r) { return distSq(a, b) < r * r; }
@@ -435,7 +442,6 @@
 
         // --- NEW XP SYSTEM WITH REWARDS ---
         function gainXP(amount) {
-            // Level 9 Reward: +0.1 XP Multiplier (10% boost)
             let multiplier = 1.0;
             if (userStats.level >= 9) multiplier += 0.1;
             
@@ -444,12 +450,10 @@
             if (userStats.currentXP >= userStats.xpToNext) {
                 userStats.currentXP -= userStats.xpToNext;
                 userStats.level++;
-                // Harder Curve: 1.5x multiplier per level (was 1.2)
                 userStats.xpToNext = Math.floor(userStats.xpToNext * 1.5);
                 playSound("levelup");
                 addFloatingText(canvas.width/2, canvas.height/2 - 100, `LEVEL UP! ${userStats.level}`, "#00FFFF", 40);
                 
-                // Reward Notifications
                 if(userStats.level === 4) addFloatingText(canvas.width/2, canvas.height/2 - 50, "UNLOCKED: TURKEY SKIN", "#E30A17", 30);
                 if(userStats.level === 5) addFloatingText(canvas.width/2, canvas.height/2 - 50, "REWARD: +5 START SIZE", "#00FF00", 30);
                 if(userStats.level === 6) addFloatingText(canvas.width/2, canvas.height/2 - 50, "UNLOCKED: CHINA SKIN", "#DE2910", 30);
@@ -467,7 +471,6 @@
             document.getElementById('level-badge').innerText = `LEVEL ${userStats.level}`;
         }
 
-        // Helper for Level 5 Reward (Start Size)
         function getStartScale() {
             if (userStats.level >= 5) return 23;
             return 18;
@@ -490,7 +493,6 @@
             if (req.type === "default") return true; 
             if (req.type === "code") return userStats.unlockedSecrets.includes(skin);
             
-            // Level Reward Check
             if (req.type === "level") return userStats.level >= req.val;
 
             if (req.type === "kills") return userStats.totalKills >= req.val;
@@ -524,9 +526,8 @@
                     publish(); const hb = setInterval(publish, 5000); peer.on('disconnected', () => clearInterval(hb));
                 }
                 updateStats({ game: true });
-                updateHUDXP(); // Initialize XP bar
+                updateHUDXP(); 
                 gameData.mode = "single";
-                // Apply Level 5 Reward (Start Size)
                 const startSize = getStartScale();
                 gameData.players = [{
                     id: 0, active: true, x: 0, y: 0, angle: -Math.PI / 2, body: [], length: 140, dead: false, country: currentState.selectedSkin, colorBody: SKIN_BODY_COLORS[currentState.selectedSkin], scale: startSize, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, minesExplodedCurrentGame: 0, name: currentState.playerName
@@ -552,7 +553,7 @@
                 currentState.isDedicatedServer = true; 
                 currentState.isSpectating = true; 
                 currentState.isPlayingClient = false; 
-                currentState.myPlayerIndex = -1; // No local player to track
+                currentState.myPlayerIndex = -1; 
                 currentState.menu = 'playing';
                 
                 cheats.godMode = true; document.getElementById('cheat-god').innerText = "God Mode: ON (SERVER)";
@@ -562,7 +563,7 @@
                     publish(); const hb = setInterval(publish, 4000); peer.on('disconnected', () => clearInterval(hb));
                 }
                 gameData.mode = "server";
-                gameData.players = []; // No Admin Snake
+                gameData.players = []; 
                 
                 resetWorld(true);
                 toggleUI('playing'); addChatMessage("System", "HOSTING OFFICIAL SERVER. ID: " + id, "gold");
@@ -572,15 +573,12 @@
                         if (data.type === "CHAT") { const msg = { name: data.name, text: data.text, color: "#aaa" }; broadcastChat(msg); }
                         if (data.type === "JOIN") {
                             const newId = nextPlayerId++;
-                            // Default start size for joiners (Server doesn't know their level, defaults to 18 unless we send level data later)
-                            // For simplicity, official server players start at 18 unless we impl handshake
                             gameData.players.push({
                                 id: newId, active: true, x: randPosCell(), y: randPosCell(), angle: Math.random() * Math.PI * 2, body: [], length: 140, dead: false, country: data.skin || "bosnia", colorBody: SKIN_BODY_COLORS[data.skin] || "#fff", scale: 18, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, minesExplodedCurrentGame: 0, name: data.name || "Player"
                             });
                             conn.playerId = newId;
                             conn.send({ type: "WELCOME", id: newId });
                         }
-                        // --- SERVER SIDE RESPAWN REQUEST HANDLING ---
                         if (data.type === "RESPAWN_REQ" && conn.playerId) {
                             const p = gameData.players.find(pl => pl.id === conn.playerId);
                             if (p && p.dead) {
@@ -636,10 +634,9 @@
             peer.on('open', () => {
                  const conn = peer.connect(idToJoin, { serialization: 'json', reliable: true }); hostConn = conn; currentState.isHost = false; currentState.isSpectating = false; currentState.isPlayingClient = true;
                  conn.on('open', () => { 
-                     // Send Join Request
                      conn.send({ type: "JOIN", name: currentState.playerName, skin: currentState.selectedSkin });
                      currentState.menu = 'playing'; toggleUI('playing'); 
-                     updateHUDXP(); // Init XP bar for client (persists locally)
+                     updateHUDXP(); 
                      addChatMessage("System", "Joining Server...", "cyan"); 
                   });
                  conn.on('data', (data) => {
@@ -664,13 +661,11 @@
             }
             s.players.forEach((p) => {
                 p.x = randPosCell(); p.y = randPosCell(); p.body = []; p.length = 140; 
-                // Level 5 Reward Check on Reset
                 p.scale = (p.id === 0 && !currentState.isDedicatedServer) ? getStartScale() : 18; 
                 p.dead = false; p.frozenUntil = 0; p.abilityActive = false; p.lastAbilityTime = 0; p.maplePhase = null; p.kingdomPhase = null; p.minesExplodedCurrentGame = 0; p.barrageActive = false; p.barrageStartTime = 0; p.nextExplosionTime = 0; p.sovietBoost = false;
                 if (currentState.isDedicatedServer && p.id === 0) { p.scale = 50; p.length = 500; }
             });
             s.enemies = []; 
-            // --- ONLY SPAWN BOTS IF NOT OFFICIAL SERVER OR IF FORCED ---
             if (spawnBots && gameData.mode !== "server") { for (let i = 0; i < MAX_ENEMIES; i++) spawnOneEnemy(); }
         }
 
@@ -680,7 +675,6 @@
             const player = gameData.players[0]; let isCroatia = false;
             if (player && player.scale > 100 && Math.random() < 0.08) { isCroatia = true; }
             const personality = isCroatia ? 'pure_aggro' : 'balanced';
-            // INCREASED SPEED AND TURN RATE FOR KAMIKAZE BOTS
             const speed = isCroatia ? 22.0 : (2.5 + Math.random()) * 1.1; 
             const turn = isCroatia ? 0.20 : 0.08;
             gameData.enemies.push({ x: randPosCell(), y: randPosCell(), angle: Math.random() * Math.PI * 2, body: [], length: startLen, width: startWidth, baseScale: startWidth, speed: speed, boostSpeed: speed, turnSpeed: turn, alive: true, color: isCroatia ? "#CC0000" : "#C6363C", country: isCroatia ? "croatia" : "serbia", frozenUntil: 0, personality: personality });
@@ -711,18 +705,17 @@
                 resetWorld(true);
             }
 
-            // Iterate ALL players (Host + Connected Clients)
             gameData.players.forEach(p => {
                 if (p.dead) {
-                    if (p.id === 0 && keys['r'] && !currentState.isDedicatedServer) { resetWorld(true); toggleUI('playing'); } // Host respawn world
+                    if (p.id === 0 && keys['r'] && !currentState.isDedicatedServer) { resetWorld(true); toggleUI('playing'); } 
                     return; 
                 }
 
                 let inp = { targetAngle: null, sprint: false, triggerAbility: false };
-                if (p.id === 0) inp = getLocalInput(); // Host Input (Skipped if host has no player in array)
+                if (p.id === 0) inp = getLocalInput(); 
                 else {
                     const remote = playerInputs[p.id];
-                    if(remote) inp = remote; // Client Input
+                    if(remote) inp = remote; 
                 }
 
                 handlePhysics(p, inp);
@@ -735,14 +728,12 @@
             const now = Date.now();
             if (p.frozenUntil > now) return;
 
-            // AI Collision
             gameData.enemies.forEach(e => {
                 if(e.alive) {
                     if (distSq(p, e) < (p.scale + e.width)**2) killPlayer(p, null);
                     for(let i=0; i<e.body.length; i+=3) { if(distSq(p, e.body[i]) < (p.scale + e.width - 5)**2) { killPlayer(p, null); return; } }
                 }
             });
-            // PvP Collision
             gameData.players.forEach(other => {
                 if(other.id !== p.id && !other.dead) {
                     if (distSq(p, other) < (p.scale + other.scale)**2) killPlayer(p, other);
@@ -751,7 +742,6 @@
                     }
                 }
             });
-            // ABILITIES
             if (p.country === "soviet") {
                 if (inp.sprint && !p.barrageActive && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000)) { p.barrageActive = true;
                 p.barrageEndTime = now + 2000; p.nextExplosionTime = now; p.abilityActive = true;
@@ -904,7 +894,6 @@
                         s.food.splice(i, 1); 
                         const multiplier = f.isGolden ? 3 : 1; 
                         
-                        // Level 10 Reward: +0.2 Scale Gain from food (1.2x)
                         let scaleGainMult = 1.0;
                         if (p.id === currentState.myPlayerIndex && userStats.level >= 10) scaleGainMult = 1.2;
 
@@ -936,7 +925,7 @@
 
         function killPlayer(victim, killer) {
             if (victim.dead) return;
-            if (victim.id === 0 && cheats.godMode) return; // Admin God Mode Check
+            if (victim.id === 0 && cheats.godMode) return; 
             
             victim.dead = true;
             victim.deaths++; victim.abilityActive = false; victim.maplePhase = null; victim.kingdomPhase = null;
@@ -1030,7 +1019,7 @@
                         y: existing.y }); while (existing.body.length > tp.length) existing.body.pop();
                         return existing;
                     }
-                    return tp; // fallback
+                    return tp; 
                 });
                 if (cur.enemies.length !== tar.enemies.length) cur.enemies = tar.enemies.map((e) => ({ ...e, body: [] }));
                 cur.enemies.forEach((e, i) => { const te = tar.enemies[i]; if(te) { e.x = lerp(e.x, te.x, t); e.y = lerp(e.y, te.y, t); e.alive = te.alive; e.width = te.width; e.color = te.color; if (e.alive) { e.body.unshift({ x: e.x, y: e.y }); while (e.body.length > 140) e.body.pop(); } } });
@@ -1271,21 +1260,16 @@
             rect(-r + r * 0.8, -r, r * 1.2, r * 2, "#DA291C"); ctx.fillStyle = "#FFD700"; ctx.beginPath();
             ctx.arc(-r * 0.2, 0, r * 0.4, 0, TWO_PI); ctx.fill();
             }
-            // --- NEW REWARD SKINS ---
             else if (country === 'turkey') {
                 rect(-r, -r, r * 2, r * 2, "#E30A17");
-                // Crescent
                 ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(-r*0.2, 0, r*0.5, 0, TWO_PI); ctx.fill();
                 ctx.fillStyle = "#E30A17"; ctx.beginPath(); ctx.arc(-r*0.1, 0, r*0.4, 0, TWO_PI); ctx.fill();
-                // Star
                 ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(r*0.3, 0, r*0.15, 0, TWO_PI); ctx.fill();
             }
             else if (country === 'china') {
                 rect(-r, -r, r * 2, r * 2, "#DE2910");
                 ctx.fillStyle = "#FFDE00"; 
-                // Big Star
                 ctx.beginPath(); ctx.arc(-r*0.5, -r*0.5, r*0.2, 0, TWO_PI); ctx.fill();
-                // 4 Small Stars
                 ctx.beginPath(); ctx.arc(-r*0.2, -r*0.7, r*0.07, 0, TWO_PI); ctx.fill();
                 ctx.beginPath(); ctx.arc(-r*0.1, -r*0.5, r*0.07, 0, TWO_PI); ctx.fill();
                 ctx.beginPath(); ctx.arc(-r*0.1, -r*0.3, r*0.07, 0, TWO_PI); ctx.fill();
@@ -1344,7 +1328,7 @@
                             const nameHtml = isOfficial ? `<b style="color:#FFD700">★ OFFICIAL SERVER</b>` : `<b>${data.host}</b>`;
                             const btnColor = isOfficial ? 'gold' : '#28a745'; const btnText = isOfficial ? 'JOIN NOW' : 'SPECTATE'; const txtColor = isOfficial ? 'black' : 'white';
                             row.innerHTML = `<div>${nameHtml}</div><div style="background:${btnColor}; padding:3px 6px; border-radius:3px; font-size:10px; color:${txtColor}; font-weight:bold;">${btnText}</div>`;
-                            // Join Official as Player, or Spectate others
+                            
                             row.onclick = () => { if(isOfficial) initGameClient(doc.id);
                             else initSpectate(doc.id); };
                             list.appendChild(row);
@@ -1367,7 +1351,7 @@
         window.addEventListener('keyup', e => { if (document.activeElement === document.getElementById('chat-input')) return; keys[e.key.toLowerCase()] = false; });
         window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
         window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
-        // --- GLOBAL MOUSE HANDLER TO FIX CHAT FOCUS ---
+        
         window.addEventListener('mousedown', (e) => {
             const chatContainer = document.getElementById('chat-container');
             const chatInput = document.getElementById('chat-input');
@@ -1392,7 +1376,7 @@
 
         const chatInputEl = document.getElementById('chat-input');
         chatInputEl.addEventListener('keydown', (e) => {
-            e.stopPropagation(); // Prevent game inputs (like W/A/S/D) from triggering while typing
+            e.stopPropagation(); 
             if (e.key === 'Enter') {
                 const text = e.target.value;
                 if (text.trim()) {
