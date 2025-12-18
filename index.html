@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: Leveling Update (Fix)</title>
+    <title>Bosnia Snake: Kingdom Update</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -1191,11 +1191,31 @@
             } else if (p.country === "bosnian_kingdom") {
                 const cooldown = 30000;
                 if (inp.triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > cooldown)) {
-                    p.kingdomPhase = "active"; p.phaseEndTime = now + 1500; p.lastAbilityTime = now; playSound("soviet_boom");
-                    const radius = 300;
-                    for (let i = gameData.food.length - 1; i >= 0; i--) { if (distSq(p, gameData.food[i]) < radius * radius) { gameData.food.splice(i, 1); gameData.mines.push({ x: p.x + (Math.random()-0.5)*50, y: p.y + (Math.random()-0.5)*50, state: "idle", type: "bosnian", ownerId: p.id, timer: 0.5, lastTick: now }); } }
-                    gameData.mines.forEach(m => { if (distSq(p, m) < radius * radius && m.type !== "bosnian") { m.type = "bosnian"; m.ownerId = p.id; m.state = "idle"; } });
-                    for(let i=0; i<8; i++) { const angle = (i / 8) * TWO_PI; gameData.mines.push({ x: p.x + Math.cos(angle) * 250, y: p.y + Math.sin(angle) * 250, state: "idle", type: "bosnian", ownerId: p.id, timer: 0.5, lastTick: now }); }
+                    p.kingdomPhase = "active"; 
+                    p.phaseEndTime = now + 1000; 
+                    p.lastAbilityTime = now; 
+                    playSound("soviet_boom");
+                    
+                    // --- NEW LOGIC: SINGLE BIG BOMB (Updated) ---
+                    // Fuse Calculation: Size 100 = 1 sec, Size 300 = 3 sec.
+                    // Math: Size * 0.01 seconds -> Size * 10 milliseconds
+                    const fuseMs = Math.max(1000, p.scale * 10); 
+                    
+                    // Explosion Radius: Proportional to size
+                    const blastRadius = p.scale * 8;
+
+                    gameData.mines.push({ 
+                        x: p.x, 
+                        y: p.y, 
+                        state: "kingdom_fuse", // New state for this bomb
+                        type: "bosnian_nuke", 
+                        ownerId: p.id, 
+                        fuseEnd: now + fuseMs,
+                        maxRadius: blastRadius,
+                        lastTick: now 
+                    });
+
+                    addFloatingText(p.x, p.y, `BOMB! ${(fuseMs/1000).toFixed(1)}s`, "#FFD700", 25);
                 }
                 if (p.kingdomPhase === "active" && now > p.phaseEndTime) p.kingdomPhase = null;
             }
@@ -1284,9 +1304,71 @@
             });
 
             for (let i = s.mines.length - 1; i >= 0; i--) {
-                let m = s.mines[i]; const isBosnian = m.type === "bosnian"; const triggerRadius = 200; const explodeRadius = isBosnian ? 900 : 300; const delay = isBosnian ? 500 : 3000;
-                if (m.state === "idle") { let triggered = false; let triggerer = null; activeEntities.forEach((p) => { if (!p.dead) { if (isBosnian && p.id === m.ownerId) return; if (distSq(p, m) < triggerRadius * triggerRadius) { triggered = true; triggerer = p; } } }); if (triggered) { m.state = "triggered"; m.lastTick = now; if (triggerer && triggerer.id === currentState.myPlayerIndex && !isBosnian) { triggerer.minesExplodedCurrentGame = (triggerer.minesExplodedCurrentGame || 0) + 1; updateStats({ minesExploded: triggerer.minesExplodedCurrentGame }); } } } 
-                else if (m.state === "triggered") { if (now - m.lastTick > delay) { createExplosion(m.x, m.y, isBosnian ? 200 : 10); activeEntities.forEach((p) => { if (!p.dead) { if (isBosnian && p.id === m.ownerId) return; if (distSq(p, m) < explodeRadius * explodeRadius) { if(p.id !== undefined) killPlayer(p, null); else killEnemy(p, null); } } }); s.mines.splice(i, 1); } }
+                let m = s.mines[i]; 
+
+                // --- NEW: BOSNIAN NUKE LOGIC (Updated) ---
+                if (m.type === "bosnian_nuke" && m.state === "kingdom_fuse") {
+                    // Check if fuse time is up
+                    if (now >= m.fuseEnd) {
+                        createExplosion(m.x, m.y, m.maxRadius);
+                        activeEntities.forEach((p) => { 
+                            if (!p.dead) { 
+                                // Owner is immune to their own nuke (optional)
+                                if (p.id === m.ownerId) return; 
+                                
+                                if (distSq(p, m) < m.maxRadius * m.maxRadius) { 
+                                    if(p.id !== undefined) killPlayer(p, null); 
+                                    else killEnemy(p, null); 
+                                } 
+                            } 
+                        }); 
+                        s.mines.splice(i, 1);
+                    }
+                    continue; // Skip standard mine logic for the nuke
+                }
+                // -------------------------------
+
+                const isBosnian = m.type === "bosnian"; 
+                const triggerRadius = 200; 
+                const explodeRadius = isBosnian ? 900 : 300; 
+                const delay = isBosnian ? 500 : 3000;
+                
+                if (m.state === "idle") { 
+                    let triggered = false; 
+                    let triggerer = null; 
+                    activeEntities.forEach((p) => { 
+                        if (!p.dead) { 
+                            if (isBosnian && p.id === m.ownerId) return; 
+                            if (distSq(p, m) < triggerRadius * triggerRadius) { 
+                                triggered = true; 
+                                triggerer = p; 
+                            } 
+                        } 
+                    }); 
+                    if (triggered) { 
+                        m.state = "triggered"; 
+                        m.lastTick = now; 
+                        if (triggerer && triggerer.id === currentState.myPlayerIndex && !isBosnian) { 
+                            triggerer.minesExplodedCurrentGame = (triggerer.minesExplodedCurrentGame || 0) + 1; 
+                            updateStats({ minesExploded: triggerer.minesExplodedCurrentGame }); 
+                        } 
+                    } 
+                } 
+                else if (m.state === "triggered") { 
+                    if (now - m.lastTick > delay) { 
+                        createExplosion(m.x, m.y, isBosnian ? 200 : 10); 
+                        activeEntities.forEach((p) => { 
+                            if (!p.dead) { 
+                                if (isBosnian && p.id === m.ownerId) return; 
+                                if (distSq(p, m) < explodeRadius * explodeRadius) { 
+                                    if(p.id !== undefined) killPlayer(p, null); 
+                                    else killEnemy(p, null); 
+                                } 
+                            } 
+                        }); 
+                        s.mines.splice(i, 1); 
+                    } 
+                }
             }
         }
 
@@ -1432,6 +1514,22 @@
                 if (m.x < viewLeft || m.x > viewRight || m.y < viewTop || m.y > viewBottom) return; 
                 if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) { ctx.fillStyle = "rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, TWO_PI); ctx.fill(); }
                 const r = 25; const d = r * 2;
+
+                // --- NEW: RENDER THE NUKE VISUAL ---
+                if (m.type === "bosnian_nuke") {
+                     const pulse = (Date.now() % 500) / 500;
+                     const size = 30 + (pulse * 10);
+                     ctx.fillStyle = pulse > 0.5 ? "red" : "#FFD700";
+                     ctx.beginPath(); ctx.arc(m.x, m.y, size, 0, TWO_PI); ctx.fill();
+                     if (m.fuseEnd) {
+                         const left = Math.max(0, (m.fuseEnd - Date.now()) / 1000).toFixed(1);
+                         ctx.fillStyle = "white"; ctx.font = "bold 20px Arial"; ctx.fillText(left + "s", m.x - 20, m.y - 40);
+                     }
+                     ctx.strokeStyle = "rgba(255, 0, 0, 0.2)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, m.maxRadius, 0, TWO_PI); ctx.stroke();
+                     return;
+                }
+                // -----------------------------------
+
                 if (m.type === "bosnian") { ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#002395"; ctx.fillRect(m.x-r, m.y-r, r*2, r*2); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(m.x, m.y, r/2, 0, TWO_PI); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#FFD700"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke(); return; }
                 ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3); ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3); ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(m.x - 10, m.y - 10); ctx.lineTo(m.x, m.y - 10); ctx.lineTo(m.x, m.y + 5); ctx.lineTo(m.x - 5, m.y + 12); ctx.lineTo(m.x - 10, m.y + 5); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#333"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke();
             });
@@ -1467,7 +1565,22 @@
             const rect = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
             if (!country) { ctx.fillStyle = fallbackColor || "white"; ctx.fillRect(-r, -r, r * 2, r * 2); return; }
             if (country === 'bosnia') { rect(-r, -r, r * 2, r * 2, "#002F6C"); ctx.fillStyle = "#FECB00"; ctx.beginPath(); ctx.moveTo(r * 0.2, -r); ctx.lineTo(r * 0.2, r); ctx.lineTo(r, -r * 0.5); ctx.fill(); ctx.fillStyle = "white"; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.6 + i * r * 0.4, r * 0.1, 0, TWO_PI); ctx.fill(); } }
-            else if (country === 'bosnian_kingdom') { rect(-r, -r, r * 2, r * 2, "#002395"); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(-r, -r); ctx.lineTo(r, r); ctx.lineTo(r, r-r/2); ctx.lineTo(-r+r/2, -r); ctx.fill(); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r/2, r/2, r/4, 0, TWO_PI); ctx.fill(); ctx.beginPath(); ctx.arc(r/2, -r/2, r/4, 0, TWO_PI); ctx.fill(); }
+            
+            // --- UPDATED BOSNIAN KINGDOM SKIN (KOTROMANIĆ / ANJOU STYLE) ---
+            else if (country === 'bosnian_kingdom') { 
+                // Royal Blue Background
+                rect(-r, -r, r * 2, r * 2, "#002395"); 
+                // White Diagonal Band (The Bend)
+                ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.beginPath(); ctx.moveTo(-r, -r * 0.2); ctx.lineTo(r, r * 0.8); ctx.lineTo(r, r * 0.2); ctx.lineTo(-r, -r * 0.8); ctx.fill();
+                // The Gold Anjou Cross Overlay
+                ctx.fillStyle = "#FFD700"; ctx.fillRect(-r*0.15, -r*0.9, r*0.3, r*1.8); ctx.fillRect(-r*0.7, -r*0.4, r*1.4, r*0.3);
+                // Decorative Lilies (Circles/Triangles representation)
+                ctx.fillStyle = "#FECB00"; ctx.beginPath(); ctx.arc(-r*0.5, r*0.5, r*0.15, 0, TWO_PI); ctx.fill(); ctx.beginPath(); ctx.arc(r*0.5, -r*0.5, r*0.15, 0, TWO_PI); ctx.fill();
+                // Gold Border
+                ctx.strokeStyle = "#D4AF37"; ctx.lineWidth = r * 0.1; ctx.strokeRect(-r, -r, r*2, r*2);
+            }
+            // -----------------------------------------------------------------
+
             else if (country === 'russia') { rect(-r, -r, r * 2, (r * 2) / 3, "white"); rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0039A6"); rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "#D52B1E"); }
             else if (country === 'croatia') { rect(-r, -r, r*2, (r*2)/3, "red"); rect(-r, -r+(r*2)/3, r*2, (r*2)/3, "white"); rect(-r, -r+4*r/3, r*2, (r*2)/3, "blue"); ctx.fillStyle = "red"; ctx.fillRect(-r/2, -r/2, r, r); ctx.fillStyle = "white"; for(let y=0; y<2; y++) for(let x=0; x<2; x++) { if((x+y)%2===0) ctx.fillRect(-r/2 + x*(r/2), -r/2 + y*(r/2), r/2, r/2); } }
             else if (country === 'serbia') { rect(-r, -r, r * 2, (r * 2) / 3, "#C6363C"); rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0C4076"); rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "white"); }
