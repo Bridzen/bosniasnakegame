@@ -850,6 +850,28 @@
                             conn.playerId = newId;
                             conn.send({ type: "WELCOME", id: newId });
                         }
+                        // --- FIX: SERVER SIDE RESPAWN REQUEST HANDLING ---
+                        if (data.type === "RESPAWN_REQ" && conn.playerId) {
+                            const p = gameData.players.find(pl => pl.id === conn.playerId);
+                            if (p && p.dead) {
+                                p.dead = false;
+                                p.x = randPosCell();
+                                p.y = randPosCell();
+                                p.angle = Math.random() * Math.PI * 2;
+                                p.body = [];
+                                p.length = 140;
+                                p.scale = 18;
+                                p.kills = 0;
+                                p.deaths++;
+                                p.frozenUntil = Date.now() + 2000;
+                                p.abilityActive = false;
+                                p.lastAbilityTime = 0;
+                                p.maplePhase = null;
+                                p.kingdomPhase = null;
+                                // Send optional ack if needed, or just let state update handle it
+                            }
+                        }
+                        // ------------------------------------------------
                         if (data.type === "INPUT" && conn.playerId) {
                             playerInputs[conn.playerId] = data.input;
                         }
@@ -908,7 +930,12 @@
                 p.x = randPosCell(); p.y = randPosCell(); p.body = []; p.length = 140; p.scale = 18; p.dead = false; p.frozenUntil = 0; p.abilityActive = false; p.lastAbilityTime = 0; p.maplePhase = null; p.kingdomPhase = null; p.minesExplodedCurrentGame = 0; p.barrageActive = false; p.barrageStartTime = 0; p.nextExplosionTime = 0; p.sovietBoost = false;
                 if (currentState.isDedicatedServer && p.id === 0) { p.scale = 50; p.length = 500; }
             });
-            s.enemies = []; if (spawnBots) { for (let i = 0; i < MAX_ENEMIES; i++) spawnOneEnemy(); }
+            s.enemies = []; 
+            // --- FIX: ONLY SPAWN BOTS IF NOT OFFICIAL SERVER OR IF FORCED ---
+            // However, the function arg spawnBots controls initial spawn. 
+            // We will filter in the updateHostLogic for ongoing spawns, but here we check mode
+            if (spawnBots && gameData.mode !== "server") { for (let i = 0; i < MAX_ENEMIES; i++) spawnOneEnemy(); }
+            // ---------------------------------------------------------------
         }
 
         function spawnOneEnemy() {
@@ -929,7 +956,13 @@
 
         function updateHostLogic() {
             gameData.enemies = gameData.enemies.filter(e => e.alive);
-            if (gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.02) spawnOneEnemy();
+            
+            // --- FIX: DO NOT SPAWN AI IN OFFICIAL SERVER MODE ---
+            const isOfficialServer = gameData.mode === "server";
+            if (!isOfficialServer && gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.02) {
+                spawnOneEnemy();
+            }
+            // ----------------------------------------------------
 
             // Iterate ALL players (Host + Connected Clients)
             gameData.players.forEach(p => {
@@ -1096,7 +1129,9 @@
                     id: p.id, active: p.active, dead: p.dead, x: Math.round(p.x), y: Math.round(p.y),
                     angle: Number(p.angle.toFixed(2)), scale: Number(p.scale.toFixed(2)), length: Math.round(p.length),
                     country: p.country, colorBody: p.colorBody, kills: p.kills, deaths: p.deaths,
-                    frozenUntil: p.frozenUntil || 0, abilityActive: p.abilityActive || false, maplePhase: p.maplePhase, kingdomPhase: p.kingdomPhase, name: p.name
+                    // --- FIX: SENDING LAST ABILITY TIME (lat) FOR GUI COUNTDOWN ---
+                    frozenUntil: p.frozenUntil || 0, abilityActive: p.abilityActive || false, lat: p.lastAbilityTime, maplePhase: p.maplePhase, kingdomPhase: p.kingdomPhase, name: p.name
+                    // -------------------------------------------------------------
                 })),
                 enemies: state.enemies.map((e) => ({ alive: e.alive, color: e.color, width: Math.round(e.width), x: Math.round(e.x), y: Math.round(e.y), angle: Number(e.angle.toFixed(2)), frozenUntil: e.frozenUntil || 0 })),
             };
@@ -1124,6 +1159,9 @@
                     const existing = cur.players.find(p => p.id === tp.id);
                     if(existing) {
                         existing.x = lerp(existing.x, tp.x, t); existing.y = lerp(existing.y, tp.y, t); existing.angle = lerpAngle(existing.angle, tp.angle, t); existing.scale = tp.scale; existing.country = tp.country; existing.dead = tp.dead; existing.name = tp.name; existing.abilityActive = tp.abilityActive; existing.maplePhase = tp.maplePhase; existing.kingdomPhase = tp.kingdomPhase;
+                        // --- FIX: RECEIVE LAST ABILITY TIME FOR GUI ---
+                        if(tp.lat) existing.lastAbilityTime = tp.lat;
+                        // ----------------------------------------------
                         if (!existing.body) existing.body = []; existing.body.unshift({ x: existing.x, y: existing.y }); while (existing.body.length > tp.length) existing.body.pop();
                         return existing;
                     }
@@ -1138,8 +1176,17 @@
                     hostConn.send({ type: "INPUT", input: inp });
                     // Death Logic for Client
                     const me = cur.players.find(p => p.id === currentState.myPlayerIndex);
-                    if (me && me.dead && currentState.menu !== 'death') {
-                        toggleUI('death');
+                    if (me && me.dead) {
+                         if (currentState.menu !== 'death') toggleUI('death');
+                         // --- FIX: SEND RESPAWN REQUEST IF DEAD AND R PRESSED ---
+                         if (keys['r']) {
+                             hostConn.send({ type: "RESPAWN_REQ" });
+                         }
+                         // ------------------------------------------------------
+                    }
+                    // Reset UI if revived
+                    if (me && !me.dead && currentState.menu === 'death') {
+                        toggleUI('playing');
                     }
                 }
             }
