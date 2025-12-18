@@ -1,10 +1,10 @@
-```html
+``html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: Kingdom Update (XP & Progression)</title>
+    <title>Bosnia Snake: Leveling Update</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -47,7 +47,7 @@
             top: 20px;
             left: 20px;
             width: 240px;
-            height: 85px; /* Taller for XP */
+            height: 95px; /* Taller for XP */
             background: rgba(0, 15, 60, 0.7);
             border: 2px solid #0055A4;
             border-radius: 10px;
@@ -113,8 +113,15 @@
             font-size: 12px;
             color: cyan;
             font-weight: bold;
-            margin-top: 2px;
+            margin-top: 4px;
             text-align: center;
+            display: flex;
+            justify-content: space-between;
+        }
+        #active-buffs {
+            font-size: 9px;
+            color: #0f0;
+            text-align: right;
         }
 
         /* --- ABILITY INDICATOR (For Special Skins) --- */
@@ -530,9 +537,12 @@
             <!-- XP BAR -->
             <div id="xp-container">
                 <div id="xp-fill"></div>
-                <div id="xp-text">0 / 100 XP</div>
+                <div id="xp-text">0 / 300 XP</div>
             </div>
-            <div id="level-badge">LEVEL 1</div>
+            <div id="level-badge">
+                <span>LEVEL 1</span>
+                <span id="active-buffs"></span>
+            </div>
         </div>
 
         <!-- ABILITY HUD -->
@@ -719,7 +729,8 @@
         const SKINS_NORMAL = [
             "bosnia", "russia", "germany", "france", "canada", "ukraine", 
             "usa", "uk", "italy", "poland", "sweden", "denmark",
-            "spain", "netherlands", "greece", "switzerland", "norway", "finland", "portugal"
+            "spain", "netherlands", "greece", "switzerland", "norway", "finland", "portugal",
+            "turkey", "china" // Added new skins here
         ];
         const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple", "bosnian_kingdom"];
 
@@ -731,7 +742,8 @@
             poland: "#DC143C", sweden: "#006AA7", denmark: "#C60C30", serbia: "#C6363C",
             croatia: "#CC0000",
             spain: "#AA151B", netherlands: "#FF8800", greece: "#0D5EAF",
-            switzerland: "#FF0000", norway: "#BA0C2F", finland: "#FFFFFF", portugal: "#046A38"
+            switzerland: "#FF0000", norway: "#BA0C2F", finland: "#FFFFFF", portugal: "#046A38",
+            turkey: "#E30A17", china: "#DE2910" // Colors for Turkey and China
         };
 
         const UNLOCK_CRITERIA = {
@@ -755,6 +767,9 @@
             norway: { type: "length", val: 1000, label: "Length 1000 (Vikings)" },
             finland: { type: "kills", val: 40, label: "Kills 40 (Sniper)" },
             portugal: { type: "length", val: 1143, label: "Length 1143 (Year)" },
+
+            turkey: { type: "level", val: 4, label: "Reach Level 4" }, // LEVEL 4 REWARD
+            china: { type: "level", val: 6, label: "Reach Level 6" },   // LEVEL 6 REWARD
 
             ireland: { type: "code", label: "Secret Code" },
             soviet: { type: "custom_soviet", label: "Russia + Size 500 + 50 Kills" },
@@ -821,7 +836,7 @@
         let userStats = { 
             totalKills: 0, totalDeaths: 0, bestScale: 18, bestLength: 140, 
             gamesPlayed: 0, maxMinesInGame: 0, unlockedSecrets: [],
-            level: 1, currentXP: 0, xpToNext: 100 // XP System
+            level: 1, currentXP: 0, xpToNext: 300 // INCREASED STARTING XP TO MAKE IT HARDER
         };
         try { const loaded = localStorage.getItem('bosnia_snake_stats_v2'); if(loaded) userStats = {...userStats, ...JSON.parse(loaded)}; } catch(e) { console.warn("Failed to load stats"); }
 
@@ -861,15 +876,28 @@
             document.getElementById('stat-length').innerText = Math.round(userStats.bestLength);
         }
 
-        // --- NEW XP SYSTEM ---
+        // --- NEW XP SYSTEM WITH HARDER LEVELING & REWARDS ---
         function gainXP(amount) {
+            // LEVEL 9 REWARD: +0.1 XP Multiplier (10% Bonus)
+            if (userStats.level >= 9) {
+                amount = amount * 1.1;
+            }
+
             userStats.currentXP += amount;
             if (userStats.currentXP >= userStats.xpToNext) {
                 userStats.currentXP -= userStats.xpToNext;
                 userStats.level++;
-                userStats.xpToNext = Math.floor(userStats.xpToNext * 1.2);
+                // HARDER LEVELING CURVE: Increased multiplier to 1.3 from 1.2
+                userStats.xpToNext = Math.floor(userStats.xpToNext * 1.3);
                 playSound("levelup");
                 addFloatingText(canvas.width/2, canvas.height/2 - 100, `LEVEL UP! ${userStats.level}`, "#00FFFF", 40);
+                
+                // Alert player of rewards
+                if(userStats.level === 4) addFloatingText(canvas.width/2, canvas.height/2, "REWARD: TURKEY SKIN UNLOCKED!", "#E30A17", 30);
+                if(userStats.level === 5) addFloatingText(canvas.width/2, canvas.height/2, "REWARD: SPAWN SIZE +5!", "#00FF00", 30);
+                if(userStats.level === 6) addFloatingText(canvas.width/2, canvas.height/2, "REWARD: CHINA SKIN UNLOCKED!", "#DE2910", 30);
+                if(userStats.level === 9) addFloatingText(canvas.width/2, canvas.height/2, "REWARD: +10% XP GAIN!", "#FFFF00", 30);
+                if(userStats.level === 10) addFloatingText(canvas.width/2, canvas.height/2, "REWARD: +20% FOOD GROWTH!", "#00FF00", 30);
             }
             updateHUDXP();
             localStorage.setItem('bosnia_snake_stats_v2', JSON.stringify(userStats));
@@ -879,7 +907,14 @@
             const pct = Math.min(100, (userStats.currentXP / userStats.xpToNext) * 100);
             document.getElementById('xp-fill').style.width = pct + "%";
             document.getElementById('xp-text').innerText = `${Math.floor(userStats.currentXP)} / ${userStats.xpToNext} XP`;
-            document.getElementById('level-badge').innerText = `LEVEL ${userStats.level}`;
+            document.getElementById('level-badge').firstElementChild.innerText = `LEVEL ${userStats.level}`;
+            
+            // Show Active Buffs on HUD
+            let buffText = "";
+            if (userStats.level >= 5) buffText += "+SIZE ";
+            if (userStats.level >= 9) buffText += "+XP ";
+            if (userStats.level >= 10) buffText += "+GROWTH";
+            document.getElementById('active-buffs').innerText = buffText;
         }
 
         function addFloatingText(x, y, text, color, fontSize=20) {
@@ -892,6 +927,10 @@
         function isSkinUnlocked(skin) {
             if (userStats.unlockedSecrets.includes("MASTER_UNLOCK")) return true;
             const req = UNLOCK_CRITERIA[skin]; if (!req) return true;
+            
+            // Check Level Requirements
+            if (req.type === "level") return userStats.level >= req.val;
+            
             if (skin === "soviet") return isSkinUnlocked("russia") && userStats.bestScale >= 500 && userStats.totalKills >= 50;
             if (skin === "golden_maple") return isSkinUnlocked("canada") && userStats.bestScale >= 250 && userStats.totalKills >= 150;
             if (skin === "bosnian_kingdom") return isSkinUnlocked("bosnia") && userStats.bestScale >= 271 && userStats.totalKills >= 40 && userStats.maxMinesInGame >= 20;
@@ -925,9 +964,14 @@
                 }
                 updateStats({ game: true });
                 updateHUDXP(); // Initialize XP bar
+                
+                // LEVEL 5 REWARD CHECK
+                let startScale = 18;
+                if (userStats.level >= 5) startScale += 5;
+
                 gameData.mode = "single";
                 gameData.players = [{
-                    id: 0, active: true, x: 0, y: 0, angle: -Math.PI / 2, body: [], length: 140, dead: false, country: currentState.selectedSkin, colorBody: SKIN_BODY_COLORS[currentState.selectedSkin], scale: 18, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, minesExplodedCurrentGame: 0, name: currentState.playerName
+                    id: 0, active: true, x: 0, y: 0, angle: -Math.PI / 2, body: [], length: 140, dead: false, country: currentState.selectedSkin, colorBody: SKIN_BODY_COLORS[currentState.selectedSkin], scale: startScale, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, minesExplodedCurrentGame: 0, name: currentState.playerName
                 }];
                 resetWorld(true); toggleUI('playing'); addChatMessage("System", "Welcome to Single Player! Room ID: " + id, "lime");
                 peer.on('connection', (conn) => {
@@ -947,7 +991,6 @@
                 currentState.myId = id; 
                 currentState.isHost = true; 
                 currentState.isDedicatedServer = true; 
-                // --- SERVER HOST IS NOW A SPECTATOR, NO SNAKE SPAWNED ---
                 currentState.isSpectating = true; 
                 currentState.isPlayingClient = false; 
                 currentState.myPlayerIndex = -1; // No local player to track
@@ -971,33 +1014,19 @@
                         if (data.type === "CHAT") { const msg = { name: data.name, text: data.text, color: "#aaa" }; broadcastChat(msg); }
                         if (data.type === "JOIN") {
                             const newId = nextPlayerId++;
+                            // NOTE: Levels/Rewards not synced to dedicated server yet (simplified)
                             gameData.players.push({
                                 id: newId, active: true, x: randPosCell(), y: randPosCell(), angle: Math.random() * Math.PI * 2, body: [], length: 140, dead: false, country: data.skin || "bosnia", colorBody: SKIN_BODY_COLORS[data.skin] || "#fff", scale: 18, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, minesExplodedCurrentGame: 0, name: data.name || "Player"
                             });
                             conn.playerId = newId;
                             conn.send({ type: "WELCOME", id: newId });
                         }
-                        // --- SERVER SIDE RESPAWN REQUEST HANDLING ---
                         if (data.type === "RESPAWN_REQ" && conn.playerId) {
                             const p = gameData.players.find(pl => pl.id === conn.playerId);
                             if (p && p.dead) {
-                                p.dead = false;
-                                p.x = randPosCell();
-                                p.y = randPosCell();
-                                p.angle = Math.random() * Math.PI * 2;
-                                p.body = [];
-                                p.length = 140;
-                                p.scale = 18;
-                                p.kills = 0;
-                                p.deaths++;
-                                p.frozenUntil = Date.now() + 2000;
-                                p.abilityActive = false;
-                                p.lastAbilityTime = 0;
-                                p.maplePhase = null;
-                                p.kingdomPhase = null;
+                                p.dead = false; p.x = randPosCell(); p.y = randPosCell(); p.angle = Math.random() * Math.PI * 2; p.body = []; p.length = 140; p.scale = 18; p.kills = 0; p.deaths++; p.frozenUntil = Date.now() + 2000; p.abilityActive = false; p.lastAbilityTime = 0; p.maplePhase = null; p.kingdomPhase = null;
                             }
                         }
-                        // ------------------------------------------------
                         if (data.type === "INPUT" && conn.playerId) {
                             playerInputs[conn.playerId] = data.input;
                         }
@@ -1054,11 +1083,16 @@
             for (let i = 0; i < 400; i++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); }
             for (let i = 0; i < 80; i++) { s.mines.push({ x: randPosCell(), y: randPosCell(), state: "idle", timer: 3.0, lastTick: Date.now() }); }
             s.players.forEach((p) => {
-                p.x = randPosCell(); p.y = randPosCell(); p.body = []; p.length = 140; p.scale = 18; p.dead = false; p.frozenUntil = 0; p.abilityActive = false; p.lastAbilityTime = 0; p.maplePhase = null; p.kingdomPhase = null; p.minesExplodedCurrentGame = 0; p.barrageActive = false; p.barrageStartTime = 0; p.nextExplosionTime = 0; p.sovietBoost = false;
+                p.x = randPosCell(); p.y = randPosCell(); p.body = []; p.length = 140; 
+                // LEVEL 5 REWARD CHECK IN RESPAWN
+                let startScale = 18;
+                if (p.id === currentState.myPlayerIndex && userStats.level >= 5) startScale += 5;
+                p.scale = startScale; 
+
+                p.dead = false; p.frozenUntil = 0; p.abilityActive = false; p.lastAbilityTime = 0; p.maplePhase = null; p.kingdomPhase = null; p.minesExplodedCurrentGame = 0; p.barrageActive = false; p.barrageStartTime = 0; p.nextExplosionTime = 0; p.sovietBoost = false;
                 if (currentState.isDedicatedServer && p.id === 0) { p.scale = 50; p.length = 500; }
             });
             s.enemies = []; 
-            // --- ONLY SPAWN BOTS IF NOT OFFICIAL SERVER OR IF FORCED ---
             if (spawnBots && gameData.mode !== "server") { for (let i = 0; i < MAX_ENEMIES; i++) spawnOneEnemy(); }
         }
 
@@ -1066,7 +1100,6 @@
             const startLen = 140 + Math.random() * 100; const startWidth = 14;
             const player = gameData.players[0]; let isCroatia = false; if (player && player.scale > 100 && Math.random() < 0.08) { isCroatia = true; }
             const personality = isCroatia ? 'pure_aggro' : 'balanced';
-            // INCREASED SPEED AND TURN RATE FOR KAMIKAZE BOTS
             const speed = isCroatia ? 22.0 : (2.5 + Math.random()) * 1.1; 
             const turn = isCroatia ? 0.20 : 0.08;
             gameData.enemies.push({ x: randPosCell(), y: randPosCell(), angle: Math.random() * Math.PI * 2, body: [], length: startLen, width: startWidth, baseScale: startWidth, speed: speed, boostSpeed: speed, turnSpeed: turn, alive: true, color: isCroatia ? "#CC0000" : "#C6363C", country: isCroatia ? "croatia" : "serbia", frozenUntil: 0, personality: personality });
@@ -1083,32 +1116,18 @@
 
         function updateHostLogic() {
             gameData.enemies = gameData.enemies.filter(e => e.alive);
-            
-            // --- FIX: DO NOT SPAWN AI IN OFFICIAL SERVER MODE ---
             const isOfficialServer = gameData.mode === "server";
-            if (!isOfficialServer && gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.02) {
-                spawnOneEnemy();
-            }
+            if (!isOfficialServer && gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.02) { spawnOneEnemy(); }
+            if (currentState.isDedicatedServer && keys['r']) { resetWorld(true); }
 
-            // --- FIX: ALLOW DEDICATED SERVER HOST TO RESET EVEN WITHOUT PLAYER ENTITY ---
-            if (currentState.isDedicatedServer && keys['r']) {
-                resetWorld(true);
-            }
-
-            // Iterate ALL players (Host + Connected Clients)
             gameData.players.forEach(p => {
                 if (p.dead) {
-                    if (p.id === 0 && keys['r'] && !currentState.isDedicatedServer) { resetWorld(true); toggleUI('playing'); } // Host respawn world
+                    if (p.id === 0 && keys['r'] && !currentState.isDedicatedServer) { resetWorld(true); toggleUI('playing'); } 
                     return; 
                 }
-
                 let inp = { targetAngle: null, sprint: false, triggerAbility: false };
-                if (p.id === 0) inp = getLocalInput(); // Host Input (Skipped if host has no player in array)
-                else {
-                    const remote = playerInputs[p.id];
-                    if(remote) inp = remote; // Client Input
-                }
-
+                if (p.id === 0) inp = getLocalInput(); 
+                else { const remote = playerInputs[p.id]; if(remote) inp = remote; }
                 handlePhysics(p, inp);
             });
 
@@ -1119,7 +1138,6 @@
         function handlePhysics(p, inp) {
             const now = Date.now(); if (p.frozenUntil > now) return;
 
-            // AI Collision
             gameData.enemies.forEach(e => {
                 if(e.alive) {
                     if (distSq(p, e) < (p.scale + e.width)**2) killPlayer(p, null);
@@ -1127,19 +1145,13 @@
                 }
             });
 
-            // PvP Collision (New for Multiplayer)
             gameData.players.forEach(other => {
                 if(other.id !== p.id && !other.dead) {
-                    // Head to Head (Biggest wins? or both die? Let's say both die to be safe/fair or rely on small delta)
                     if (distSq(p, other) < (p.scale + other.scale)**2) killPlayer(p, other);
-                    // Head to Body
-                    for(let i=0; i<other.body.length; i+=3) {
-                         if(coll(p, other.body[i], p.scale + other.scale - 5)) { killPlayer(p, other); return; }
-                    }
+                    for(let i=0; i<other.body.length; i+=3) { if(coll(p, other.body[i], p.scale + other.scale - 5)) { killPlayer(p, other); return; } }
                 }
             });
 
-            // ABILITIES
             if (p.country === "soviet") {
                 if (inp.sprint && !p.barrageActive && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000)) { p.barrageActive = true; p.barrageEndTime = now + 2000; p.nextExplosionTime = now; p.abilityActive = true; }
                 if (p.barrageActive) {
@@ -1186,22 +1198,8 @@
                 const mySizeMultiplier = Math.max(1, enemy.width / 15); const detectionRange = 200 * mySizeMultiplier; 
                 state.players.forEach(p => { 
                     if(!p.dead) { 
-                        // KAMIKAZE BOTS IGNORE HEAD COLLISION AVOIDANCE
-                        if (p.scale > enemy.width && enemy.country !== 'croatia') { 
-                            const d = dist(enemy, p); 
-                            if (d < detectionRange + p.scale) { const push = 10000 / (d + 1); finalX -= (p.x - enemy.x) * push; finalY -= (p.y - enemy.y) * push; } 
-                        } 
-                        
-                        // KAMIKAZE BOTS AVOID BODIES HARDER TO GET TO HEAD
-                        for(let i=0; i < p.body.length; i+=2) { 
-                            const b = p.body[i]; const d = dist(enemy, b); 
-                            if(d < detectionRange) { 
-                                // Multiply push force for kamikaze bots to weave better
-                                const pushMult = (enemy.country === 'croatia') ? 35000 : 15000;
-                                const push = (pushMult * mySizeMultiplier) / (d + 1); 
-                                finalX -= (b.x - enemy.x) * push; finalY -= (b.y - enemy.y) * push; 
-                            } 
-                        } 
+                        if (p.scale > enemy.width && enemy.country !== 'croatia') { const d = dist(enemy, p); if (d < detectionRange + p.scale) { const push = 10000 / (d + 1); finalX -= (p.x - enemy.x) * push; finalY -= (p.y - enemy.y) * push; } } 
+                        for(let i=0; i < p.body.length; i+=2) { const b = p.body[i]; const d = dist(enemy, b); if(d < detectionRange) { const pushMult = (enemy.country === 'croatia') ? 35000 : 15000; const push = (pushMult * mySizeMultiplier) / (d + 1); finalX -= (b.x - enemy.x) * push; finalY -= (b.y - enemy.y) * push; } } 
                     } 
                 });
                 state.enemies.forEach(other => { if(other !== enemy && other.alive) { const d = dist(enemy, other); if(d < detectionRange) { const push = 5000 / (d + 1); finalX -= (other.x - enemy.x) * push; finalY -= (other.y - enemy.y) * push; } for (let i = 0; i < other.body.length; i += 4) { const b = other.body[i]; const bd = dist(enemy, b); if (bd < detectionRange) { const push = 8000 / (bd + 1); finalX -= (b.x - enemy.x) * push; finalY -= (b.y - enemy.y) * push; } } } });
@@ -1210,17 +1208,7 @@
                 if (!isEvading) {
                     let targetPlayer = null; let distToPlayer = Infinity;
                     state.players.forEach((p) => { if (!p.dead && p.active) { const d = dist(enemy, p); if(d < distToPlayer) { distToPlayer = d; targetPlayer = p; } } });
-                    
-                    // KAMIKAZE LOGIC
-                    if (enemy.country === 'croatia' && targetPlayer) { 
-                        // Predict player movement to intercept head
-                        const dx = targetPlayer.x - enemy.x; 
-                        const dy = targetPlayer.y - enemy.y; 
-                        // Massive attraction to head, ignoring self-preservation
-                        finalX += dx * 15.0; 
-                        finalY += dy * 15.0; 
-                        forceSprint = true; 
-                    } 
+                    if (enemy.country === 'croatia' && targetPlayer) { const dx = targetPlayer.x - enemy.x; const dy = targetPlayer.y - enemy.y; finalX += dx * 15.0; finalY += dy * 15.0; forceSprint = true; } 
                     else if (targetPlayer && distToPlayer < AGGRO_RADIUS && enemy.width > targetPlayer.scale) { finalX += (targetPlayer.x - enemy.x) * 2.0; finalY += (targetPlayer.y - enemy.y) * 2.0; if(Math.random() < 0.1) forceSprint = true; } 
                     else { let closestFood = null; let minFoodDist = Infinity; state.food.forEach((f) => { if (f.level < 2 && enemy.width > 50) return; const d = dist(enemy, f); if (d < minFoodDist && d < 800) { minFoodDist = d; closestFood = f; } }); if(closestFood) { finalX += (closestFood.x - enemy.x) * 1.5; finalY += (closestFood.y - enemy.y) * 1.5; } else { finalX += Math.cos(enemy.angle) * 200; finalY += Math.sin(enemy.angle) * 200; } }
                 }
@@ -1241,11 +1229,33 @@
         function updateEnvironment(activeEntities) {
             const s = gameData; const now = Date.now();
             for (let i = s.syrupZones.length - 1; i >= 0; i--) { if (now > s.syrupZones[i].expiresAt) s.syrupZones.splice(i, 1); }
-            // OPTIMIZATION: Faster explosion fade out
             for (let i = s.explosions.length - 1; i >= 0; i--) { s.explosions[i].radius += 15; s.explosions[i].alpha -= 0.1; if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1); }
             if (s.food.length < 400) { for (let k = 0; k < 10; k++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); } }
             activeEntities.forEach((p) => { if (p.country === "golden_maple" && p.maplePhase === "harvest") { s.food.forEach((f) => { if (distSq(p, f) < (5 * CELL)**2) f.isGolden = true; }); } });
-            s.food.forEach((f, i) => { const foodLevel = f.level || 1; const rad = FOOD_RADIUS_BASE + foodLevel * 1.5; activeEntities.forEach((p) => { if (!p.dead && coll(p, f, p.scale + rad)) { if (p.id === currentState.myPlayerIndex) { playSound("eat"); gainXP(foodLevel * 2); } s.food.splice(i, 1); const multiplier = f.isGolden ? 3 : 1; p.length += LENGTH_GAIN * multiplier; p.scale = Math.min(2000, p.scale + foodLevel * SIZE_GAIN_PER_LEVEL * multiplier); } }); });
+            
+            s.food.forEach((f, i) => { 
+                const foodLevel = f.level || 1; const rad = FOOD_RADIUS_BASE + foodLevel * 1.5; 
+                activeEntities.forEach((p) => { 
+                    if (!p.dead && coll(p, f, p.scale + rad)) { 
+                        if (p.id === currentState.myPlayerIndex) { 
+                            playSound("eat"); 
+                            gainXP(foodLevel * 2); 
+                        } 
+                        s.food.splice(i, 1); 
+                        const multiplier = f.isGolden ? 3 : 1; 
+                        
+                        // LEVEL 10 REWARD: +20% Food Growth
+                        let growthMult = 1.0;
+                        if (p.id === currentState.myPlayerIndex && userStats.level >= 10) {
+                            growthMult = 1.2;
+                        }
+
+                        p.length += LENGTH_GAIN * multiplier * growthMult; 
+                        p.scale = Math.min(2000, p.scale + (foodLevel * SIZE_GAIN_PER_LEVEL * multiplier * growthMult)); 
+                    } 
+                }); 
+            });
+
             for (let i = s.mines.length - 1; i >= 0; i--) {
                 let m = s.mines[i]; const isBosnian = m.type === "bosnian"; const triggerRadius = 200; const explodeRadius = isBosnian ? 900 : 300; const delay = isBosnian ? 500 : 3000;
                 if (m.state === "idle") { let triggered = false; let triggerer = null; activeEntities.forEach((p) => { if (!p.dead) { if (isBosnian && p.id === m.ownerId) return; if (distSq(p, m) < triggerRadius * triggerRadius) { triggered = true; triggerer = p; } } }); if (triggered) { m.state = "triggered"; m.lastTick = now; if (triggerer && triggerer.id === currentState.myPlayerIndex && !isBosnian) { triggerer.minesExplodedCurrentGame = (triggerer.minesExplodedCurrentGame || 0) + 1; updateStats({ minesExploded: triggerer.minesExplodedCurrentGame }); } } } 
@@ -1261,7 +1271,7 @@
 
         function killPlayer(victim, killer) {
             if (victim.dead) return;
-            if (victim.id === 0 && cheats.godMode) return; // Admin God Mode Check
+            if (victim.id === 0 && cheats.godMode) return; 
             
             victim.dead = true; victim.deaths++; victim.abilityActive = false; victim.maplePhase = null; victim.kingdomPhase = null;
             if (victim.id === currentState.myPlayerIndex) { updateStats({ death: true, scale: victim.scale, length: victim.length }); submitScoreToLeaderboard(victim.scale); toggleUI('death'); }
@@ -1304,7 +1314,6 @@
                     id: p.id, active: p.active, dead: p.dead, x: Math.round(p.x), y: Math.round(p.y),
                     angle: Number(p.angle.toFixed(2)), scale: Number(p.scale.toFixed(2)), length: Math.round(p.length),
                     country: p.country, colorBody: p.colorBody, kills: p.kills, deaths: p.deaths,
-                    // SENDING LAST ABILITY TIME (lat) FOR GUI COUNTDOWN
                     frozenUntil: p.frozenUntil || 0, abilityActive: p.abilityActive || false, lat: p.lastAbilityTime, maplePhase: p.maplePhase, kingdomPhase: p.kingdomPhase, name: p.name
                 })),
                 enemies: state.enemies.map((e) => ({ alive: e.alive, color: e.color, width: Math.round(e.width), x: Math.round(e.x), y: Math.round(e.y), angle: Number(e.angle.toFixed(2)), frozenUntil: e.frozenUntil || 0 })),
@@ -1333,33 +1342,24 @@
                     const existing = cur.players.find(p => p.id === tp.id);
                     if(existing) {
                         existing.x = lerp(existing.x, tp.x, t); existing.y = lerp(existing.y, tp.y, t); existing.angle = lerpAngle(existing.angle, tp.angle, t); existing.scale = tp.scale; existing.country = tp.country; existing.dead = tp.dead; existing.name = tp.name; existing.abilityActive = tp.abilityActive; existing.maplePhase = tp.maplePhase; existing.kingdomPhase = tp.kingdomPhase;
-                        // RECEIVE LAST ABILITY TIME FOR GUI
                         if(tp.lat) existing.lastAbilityTime = tp.lat;
                         if (!existing.body) existing.body = []; existing.body.unshift({ x: existing.x, y: existing.y }); while (existing.body.length > tp.length) existing.body.pop();
                         return existing;
                     }
-                    return tp; // fallback
+                    return tp;
                 });
                 if (cur.enemies.length !== tar.enemies.length) cur.enemies = tar.enemies.map((e) => ({ ...e, body: [] }));
                 cur.enemies.forEach((e, i) => { const te = tar.enemies[i]; if(te) { e.x = lerp(e.x, te.x, t); e.y = lerp(e.y, te.y, t); e.alive = te.alive; e.width = te.width; e.color = te.color; if (e.alive) { e.body.unshift({ x: e.x, y: e.y }); while (e.body.length > 140) e.body.pop(); } } });
 
-                // Client Input Sending
                 if (currentState.isPlayingClient && hostConn && hostConn.open) {
                     const inp = getLocalInput();
                     hostConn.send({ type: "INPUT", input: inp });
-                    // Death Logic for Client
                     const me = cur.players.find(p => p.id === currentState.myPlayerIndex);
                     if (me && me.dead) {
                          if (currentState.menu !== 'death') toggleUI('death');
-                         // SEND RESPAWN REQUEST IF DEAD AND R PRESSED
-                         if (keys['r']) {
-                             hostConn.send({ type: "RESPAWN_REQ" });
-                         }
+                         if (keys['r']) { hostConn.send({ type: "RESPAWN_REQ" }); }
                     }
-                    // Reset UI if revived
-                    if (me && !me.dead && currentState.menu === 'death') {
-                        toggleUI('playing');
-                    }
+                    if (me && !me.dead && currentState.menu === 'death') { toggleUI('playing'); }
                 }
             }
 
@@ -1385,7 +1385,6 @@
             const startScale = 18; const zoom = Math.max(0.1, 0.6 * (30 / (30 + ((focus.scale || 18) - startScale) * 0.4)));
             ctx.scale(zoom, zoom); ctx.translate(-focus.x, -focus.y);
             
-            // --- OPTIMIZATION: View Culling ---
             const vw = canvas.width / zoom; const vh = canvas.height / zoom;
             const viewLeft = focus.x - vw/2 - 1000; const viewRight = focus.x + vw/2 + 1000;
             const viewTop = focus.y - vh/2 - 1000; const viewBottom = focus.y + vh/2 + 1000;
@@ -1395,19 +1394,15 @@
             gameData.syrupZones.forEach((z) => { ctx.fillStyle = "rgba(184, 134, 11, 0.5)"; ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = "#DAA520"; ctx.lineWidth = 4; ctx.stroke(); });
             
             gameData.food.forEach((f) => { 
-                if (f.x < viewLeft || f.x > viewRight || f.y < viewTop || f.y > viewBottom) return; // Culling
+                if (f.x < viewLeft || f.x > viewRight || f.y < viewTop || f.y > viewBottom) return; 
                 const level = f.level || 1; const size = FOOD_RADIUS_BASE + level * 1.5; 
-                // OPTIMIZATION: Removed ShadowBlur, use manual glow for Golden Food
-                if (f.isGolden) { 
-                    ctx.fillStyle = "rgba(255, 215, 0, 0.4)"; ctx.beginPath(); ctx.arc(f.x, f.y, size+5, 0, TWO_PI); ctx.fill(); // Fake glow
-                    ctx.fillStyle = "#FFD700"; 
-                } else { ctx.fillStyle = "orange"; } 
+                if (f.isGolden) { ctx.fillStyle = "rgba(255, 215, 0, 0.4)"; ctx.beginPath(); ctx.arc(f.x, f.y, size+5, 0, TWO_PI); ctx.fill(); ctx.fillStyle = "#FFD700"; } else { ctx.fillStyle = "orange"; } 
                 ctx.beginPath(); ctx.arc(f.x, f.y, size, 0, TWO_PI); ctx.fill(); 
                 if (level > 8) { ctx.globalAlpha = 0.3; ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(f.x, f.y, size + 3, 0, TWO_PI); ctx.fill(); ctx.globalAlpha = 1.0; } 
             });
 
             gameData.mines.forEach((m) => {
-                if (m.x < viewLeft || m.x > viewRight || m.y < viewTop || m.y > viewBottom) return; // Culling
+                if (m.x < viewLeft || m.x > viewRight || m.y < viewTop || m.y > viewBottom) return; 
                 if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) { ctx.fillStyle = "rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, TWO_PI); ctx.fill(); }
                 const r = 25; const d = r * 2;
                 if (m.type === "bosnian") { ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#002395"; ctx.fillRect(m.x-r, m.y-r, r*2, r*2); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(m.x, m.y, r/2, 0, TWO_PI); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#FFD700"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke(); return; }
@@ -1417,14 +1412,11 @@
             const allEntities = [...gameData.players, ...gameData.enemies];
             allEntities.forEach((p) => {
                 if (p.dead || p.alive === false) return;
-                // Culling Check (Aggressive but safe due to padding)
                 if (p.x < viewLeft - p.length && p.x > viewRight + p.length && p.y < viewTop - p.length && p.y > viewBottom + p.length) return; 
 
-                // OPTIMIZATION: Use manual circles instead of shadowBlur for effects
                 if (p.frozenUntil && Date.now() < p.frozenUntil) { ctx.fillStyle="rgba(0, 255, 255, 0.4)"; ctx.beginPath(); ctx.arc(p.x, p.y, (p.scale||12)+10, 0, TWO_PI); ctx.fill(); } 
                 else if (p.country === "soviet" && p.abilityActive) { ctx.fillStyle="rgba(255, 0, 0, 0.4)"; ctx.beginPath(); ctx.arc(p.x, p.y, (p.scale||12)+20, 0, TWO_PI); ctx.fill(); } 
                 else if (p.country === "golden_maple" && p.maplePhase === "harvest") { ctx.strokeStyle = "rgba(218, 165, 32, 0.4)"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(p.x, p.y, 5 * CELL, 0, TWO_PI); ctx.stroke(); }
-                
                 if (p.country === "bosnian_kingdom" && p.kingdomPhase === "active") { ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, 300, 0, TWO_PI); ctx.strokeStyle = "rgba(0, 35, 149, 0.6)"; ctx.lineWidth = 10; ctx.stroke(); ctx.fillStyle = "rgba(0, 35, 149, 0.2)"; ctx.fill(); ctx.restore(); }
                 
                 const bodyW = p.scale || p.width || 12; ctx.lineWidth = bodyW * 1.2; ctx.strokeStyle = (p.frozenUntil && Date.now() < p.frozenUntil) ? "cyan" : (p.colorBody || p.color || "white"); ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); if (p.body.length) { ctx.moveTo(p.body[0].x, p.body[0].y); p.body.forEach(b => ctx.lineTo(b.x, b.y)); ctx.stroke(); } 
@@ -1435,16 +1427,9 @@
 
             gameData.explosions.forEach((ex) => { ctx.fillStyle = `rgba(255,69,0,${ex.alpha})`; ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius, 0, TWO_PI); ctx.fill(); });
             
-            // DRAW FLOATING TEXTS
             for(let i = floatingTexts.length - 1; i >= 0; i--) {
-                let ft = floatingTexts[i];
-                ft.y += ft.dy;
-                ft.life -= 0.02;
-                ctx.globalAlpha = Math.max(0, ft.life);
-                ctx.fillStyle = ft.color;
-                ctx.font = `bold ${ft.size}px Arial`;
-                ctx.fillText(ft.text, ft.x, ft.y);
-                ctx.globalAlpha = 1.0;
+                let ft = floatingTexts[i]; ft.y += ft.dy; ft.life -= 0.02;
+                ctx.globalAlpha = Math.max(0, ft.life); ctx.fillStyle = ft.color; ctx.font = `bold ${ft.size}px Arial`; ctx.fillText(ft.text, ft.x, ft.y); ctx.globalAlpha = 1.0;
                 if(ft.life <= 0) floatingTexts.splice(i, 1);
             }
 
@@ -1472,8 +1457,6 @@
             else if (country === 'sweden') { rect(-r, -r, r * 2, r * 2, "#006AA7"); rect(-r, -r * 0.2, r * 2, r * 0.4, "#FECC00"); rect(-r * 0.2, -r, r * 0.4, r * 2, "#FECC00"); }
             else if (country === 'denmark') { rect(-r, -r, r * 2, r * 2, "#C60C30"); rect(-r, -r * 0.2, r * 2, r * 0.4, "white"); rect(-r * 0.2, -r, r * 0.4, r * 2, "white"); }
             else if (country === 'uk') { rect(-r, -r, r * 2, r * 2, "#012169"); rect(-r, -r * 0.3, r * 2, r * 0.6, "white"); rect(-r * 0.3, -r, r * 0.6, r * 2, "white"); rect(-r, -r * 0.15, r * 2, r * 0.3, "#C8102E"); rect(-r * 0.15, -r, r * 0.3, r * 2, "#C8102E"); }
-            
-            // --- NEW EUROPEAN SKINS ---
             else if (country === 'spain') { rect(-r, -r, r * 2, r * 2, "#AA151B"); rect(-r, -r * 0.5, r * 2, r, "#F1BF00"); }
             else if (country === 'netherlands') { rect(-r, -r, r * 2, r * 2 / 3, "#AE1C28"); rect(-r, -r + r * 2 / 3, r * 2, r * 2 / 3, "white"); rect(-r, -r + 4 * r / 3, r * 2, r * 2 / 3, "#21468B"); }
             else if (country === 'greece') { rect(-r, -r, r * 2, r * 2, "#0D5EAF"); for (let i = 0; i < 9; i++) { if (i % 2 !== 0) rect(-r, -r + (i * 2 * r / 9), r * 2, 2 * r / 9, "white"); } rect(-r, -r, r, r, "#0D5EAF"); rect(-r, -r + r * 0.4, r, r * 0.2, "white"); rect(-r + r * 0.4, -r, r * 0.2, r, "white"); }
@@ -1482,6 +1465,28 @@
             else if (country === 'finland') { rect(-r, -r, r * 2, r * 2, "white"); rect(-r, -r + r * 0.8, r * 2, r * 0.4, "#003580"); rect(-r + r * 0.6, -r, r * 0.4, r * 2, "#003580"); }
             else if (country === 'portugal') { rect(-r, -r, r * 0.8, r * 2, "#046A38"); rect(-r + r * 0.8, -r, r * 1.2, r * 2, "#DA291C"); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r * 0.2, 0, r * 0.4, 0, TWO_PI); ctx.fill(); }
             
+            // --- NEW FLAGS: TURKEY (Lvl 4) & CHINA (Lvl 6) ---
+            else if (country === 'turkey') {
+                rect(-r, -r, r*2, r*2, "#E30A17");
+                // White Circle
+                ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(-r*0.2, 0, r*0.5, 0, TWO_PI); ctx.fill();
+                // Red Circle to make crescent
+                ctx.fillStyle = "#E30A17"; ctx.beginPath(); ctx.arc(-r*0.1, 0, r*0.4, 0, TWO_PI); ctx.fill();
+                // Star
+                ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(r*0.4, 0, r*0.15, 0, TWO_PI); ctx.fill();
+            }
+            else if (country === 'china') {
+                rect(-r, -r, r*2, r*2, "#DE2910");
+                ctx.fillStyle = "#FFDE00"; 
+                // Big Star
+                ctx.beginPath(); ctx.arc(-r*0.5, -r*0.5, r*0.3, 0, TWO_PI); ctx.fill();
+                // 4 Small Stars
+                ctx.beginPath(); ctx.arc(-r*0.1, -r*0.8, r*0.1, 0, TWO_PI); ctx.fill();
+                ctx.beginPath(); ctx.arc(r*0.1, -r*0.6, r*0.1, 0, TWO_PI); ctx.fill();
+                ctx.beginPath(); ctx.arc(r*0.1, -r*0.3, r*0.1, 0, TWO_PI); ctx.fill();
+                ctx.beginPath(); ctx.arc(-r*0.1, -r*0.1, r*0.1, 0, TWO_PI); ctx.fill();
+            }
+
             else { rect(-r, -r, r * 2, r * 2, fallbackColor || "#333"); }
         }
 
@@ -1544,18 +1549,7 @@
         window.addEventListener('keyup', e => { if (document.activeElement === document.getElementById('chat-input')) return; keys[e.key.toLowerCase()] = false; });
         window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
         window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
-
-        // --- GLOBAL MOUSE HANDLER TO FIX CHAT FOCUS ---
-        window.addEventListener('mousedown', (e) => {
-            const chatContainer = document.getElementById('chat-container');
-            const chatInput = document.getElementById('chat-input');
-            // If clicking inside the container or input, do NOT blur.
-            if (chatContainer.contains(e.target) || e.target === chatInput) return;
-            // If clicking outside, blur.
-            if (document.activeElement === chatInput) {
-                chatInput.blur();
-            }
-        });
+        window.addEventListener('mousedown', (e) => { const chatContainer = document.getElementById('chat-container'); const chatInput = document.getElementById('chat-input'); if (chatContainer.contains(e.target) || e.target === chatInput) return; if (document.activeElement === chatInput) { chatInput.blur(); } });
 
         document.getElementById('btn-play').onclick = initSinglePlayer;
         document.getElementById('btn-mouse').onclick = () => { currentState.controlMode = 'mouse'; document.getElementById('btn-mouse').classList.add('active'); document.getElementById('btn-keyboard').classList.remove('active'); };
@@ -1572,7 +1566,7 @@
 
         const chatInputEl = document.getElementById('chat-input');
         chatInputEl.addEventListener('keydown', (e) => {
-            e.stopPropagation(); // Prevent game inputs (like W/A/S/D) from triggering while typing
+            e.stopPropagation(); 
             if (e.key === 'Enter') {
                 const text = e.target.value;
                 if (text.trim()) {
@@ -1581,9 +1575,7 @@
                 }
                 e.target.value = ''; document.getElementById('game-canvas').focus();
             }
-            if (e.key === 'Escape') {
-                e.target.blur();
-            }
+            if (e.key === 'Escape') { e.target.blur(); }
         });
 
         document.getElementById('btn-admin-open').onclick = () => { showOwnerLogin = true; document.getElementById('owner-login-panel').style.display = 'block'; document.getElementById('owner-password').focus(); };
