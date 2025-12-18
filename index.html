@@ -1,9 +1,10 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: Kingdom Update (Admin Server Edition)</title>
+    <title>Bosnia Snake: Kingdom Update (XP & Progression)</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -46,17 +47,25 @@
             top: 20px;
             left: 20px;
             width: 240px;
-            height: 60px;
+            height: 85px; /* Taller for XP */
             background: rgba(0, 15, 60, 0.7);
             border: 2px solid #0055A4;
             border-radius: 10px;
             display: none; /* Hidden on start */
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 15px;
+            flex-direction: column;
+            justify-content: center;
+            padding: 10px 15px;
             box-sizing: border-box;
             backdrop-filter: blur(5px);
             box-shadow: 0 0 15px rgba(0, 85, 164, 0.4);
+        }
+
+        #hud-top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 5px;
         }
 
         #hud-size { 
@@ -70,6 +79,42 @@
             font-size: 16px; 
             color: #FECB00; 
             text-shadow: 1px 1px 2px black;
+        }
+
+        /* --- XP BAR --- */
+        #xp-container {
+            width: 100%;
+            height: 10px;
+            background: #222;
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid #555;
+            position: relative;
+        }
+        #xp-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #FFD700, #FFA500);
+            transition: width 0.3s ease-out;
+        }
+        #xp-text {
+            position: absolute;
+            top: -2px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 8px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 1px black;
+            line-height: 12px;
+        }
+        #level-badge {
+            font-size: 12px;
+            color: cyan;
+            font-weight: bold;
+            margin-top: 2px;
+            text-align: center;
         }
 
         /* --- ABILITY INDICATOR (For Special Skins) --- */
@@ -341,6 +386,7 @@
             outline: none;
             width: 100%;
             box-sizing: border-box;
+            pointer-events: auto;
         }
 
         /* --- SPECTATE LIST --- */
@@ -477,8 +523,16 @@
         
         <!-- GAME HUD -->
         <div id="hud">
-            <div id="hud-size">Size: 18.0</div>
-            <div id="hud-kills">Kills: 0</div>
+            <div id="hud-top-row">
+                <div id="hud-size">Size: 18.0</div>
+                <div id="hud-kills">Kills: 0</div>
+            </div>
+            <!-- XP BAR -->
+            <div id="xp-container">
+                <div id="xp-fill"></div>
+                <div id="xp-text">0 / 100 XP</div>
+            </div>
+            <div id="level-badge">LEVEL 1</div>
         </div>
 
         <!-- ABILITY HUD -->
@@ -494,6 +548,7 @@
             <!-- Left Stats -->
             <div id="stats-panel" class="panel">
                 <div class="header-text">Stats</div>
+                <div class="row"><span>LEVEL</span><span id="stat-level" style="color: cyan">1</span></div>
                 <div class="row"><span>KILLS</span><span id="stat-kills" style="color: #FECB00">0</span></div>
                 <div class="row"><span>DEATHS</span><span id="stat-deaths" style="color: #FECB00">0</span></div>
                 <div class="row"><span>BEST SIZE</span><span id="stat-best-size" style="color: #FECB00">18.0</span></div>
@@ -659,10 +714,12 @@
         const LENGTH_GAIN = 8;
         const BROADCAST_RATE = 45;
         const INTERPOLATION_SPEED = 0.35;
+        const TWO_PI = Math.PI * 2; // Cached Math constant for lag reduction
 
         const SKINS_NORMAL = [
             "bosnia", "russia", "germany", "france", "canada", "ukraine", 
-            "usa", "uk", "italy", "poland", "sweden", "denmark"
+            "usa", "uk", "italy", "poland", "sweden", "denmark",
+            "spain", "netherlands", "greece", "switzerland", "norway", "finland", "portugal"
         ];
         const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple", "bosnian_kingdom"];
 
@@ -672,22 +729,33 @@
             golden_maple: "#DAA520", bosnian_kingdom: "#002395",
             usa: "#3C3B6E", uk: "#012169", italy: "#008C45", 
             poland: "#DC143C", sweden: "#006AA7", denmark: "#C60C30", serbia: "#C6363C",
-            croatia: "#CC0000"
+            croatia: "#CC0000",
+            spain: "#AA151B", netherlands: "#FF8800", greece: "#0D5EAF",
+            switzerland: "#FF0000", norway: "#BA0C2F", finland: "#FFFFFF", portugal: "#046A38"
         };
 
         const UNLOCK_CRITERIA = {
             bosnia: { type: "default", label: "Default" },
-            russia: { type: "scale", val: 50, label: "Reach Size 50" },
-            germany: { type: "scale", val: 40, label: "Reach Size 40" },
-            france: { type: "deaths", val: 5, label: "Die 5 Times" },
-            canada: { type: "length", val: 1000, label: "Reach Length 1k" },
-            ukraine: { type: "games", val: 5, label: "Play 5 Games" },
-            usa: { type: "scale", val: 75, label: "Reach Size 75" },
-            uk: { type: "length", val: 800, label: "Reach Length 800" },
-            italy: { type: "default", label: "Default" },
-            poland: { type: "deaths", val: 15, label: "Die 15 Times" },
-            sweden: { type: "kills", val: 10, label: "Get 10 Kills" },
-            denmark: { type: "kills", val: 25, label: "Get 25 Kills" },
+            russia: { type: "scale", val: 100, label: "Size 100 (Motherland)" },
+            germany: { type: "kills", val: 30, label: "Get 30 Kills" },
+            france: { type: "deaths", val: 10, label: "Die 10 Times" },
+            canada: { type: "length", val: 998, label: "Length 998 (Area)" },
+            ukraine: { type: "kills", val: 15, label: "Get 15 Kills" },
+            usa: { type: "scale", val: 76, label: "Size 76 (1776)" },
+            uk: { type: "length", val: 1920, label: "Length 1920 (Empire)" },
+            italy: { type: "length", val: 1000, label: "Eat 1k Food (Pasta)" },
+            poland: { type: "deaths", val: 3, label: "Die 3 Times (Partitions)" },
+            sweden: { type: "games", val: 20, label: "Play 20 Games" },
+            denmark: { type: "length", val: 800, label: "Length 800 (Vikings)" },
+            
+            spain: { type: "scale", val: 80, label: "Size 80 (Empire)" },
+            netherlands: { type: "length", val: 600, label: "Length 600 (Trade)" },
+            greece: { type: "scale", val: 45, label: "Size 45 (History)" },
+            switzerland: { type: "games", val: 10, label: "Play 10 Games (Neutral)" },
+            norway: { type: "length", val: 1000, label: "Length 1000 (Vikings)" },
+            finland: { type: "kills", val: 40, label: "Kills 40 (Sniper)" },
+            portugal: { type: "length", val: 1143, label: "Length 1143 (Year)" },
+
             ireland: { type: "code", label: "Secret Code" },
             soviet: { type: "custom_soviet", label: "Russia + Size 500 + 50 Kills" },
             golden_maple: { type: "custom_maple", label: "Canada + Size 250 + 150 Kills" },
@@ -706,6 +774,15 @@
                 osc.type = "sine"; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
                 osc.connect(gainNode); gainNode.gain.setValueAtTime(0.05, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.1);
                 osc.start(now); osc.stop(now + 0.1);
+            } else if (type === "levelup") {
+                const osc = audioCtx.createOscillator();
+                osc.type = "square";
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.linearRampToValueAtTime(880, now + 0.3);
+                osc.connect(gainNode);
+                gainNode.gain.setValueAtTime(0.1, now);
+                gainNode.gain.linearRampToValueAtTime(0, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
             } else if (type === "soviet_boom") {
                 const bufferSize = audioCtx.sampleRate * 1.5; const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
                 const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
@@ -740,8 +817,13 @@
             myPlayerIndex: 0
         };
 
-        let userStats = { totalKills: 0, totalDeaths: 0, bestScale: 18, bestLength: 140, gamesPlayed: 0, maxMinesInGame: 0, unlockedSecrets: [] };
-        try { const loaded = localStorage.getItem('bosnia_snake_stats_v2'); if(loaded) userStats = JSON.parse(loaded); } catch(e) { console.warn("Failed to load stats"); }
+        // --- UPDATED STATS FOR PROGRESSION ---
+        let userStats = { 
+            totalKills: 0, totalDeaths: 0, bestScale: 18, bestLength: 140, 
+            gamesPlayed: 0, maxMinesInGame: 0, unlockedSecrets: [],
+            level: 1, currentXP: 0, xpToNext: 100 // XP System
+        };
+        try { const loaded = localStorage.getItem('bosnia_snake_stats_v2'); if(loaded) userStats = {...userStats, ...JSON.parse(loaded)}; } catch(e) { console.warn("Failed to load stats"); }
 
         const cheats = { godMode: false, speedHack: false };
         let showOwnerLogin = false;
@@ -754,22 +836,57 @@
         const mouse = { x: 0, y: 0 };
         const keys = {};
 
+        // FLOATING TEXTS SYSTEM
+        let floatingTexts = [];
+
         let gameData = { mode: null, players: [], enemies: [], food: [], mines: [], explosions: [], syrupZones: [], shakeIntensity: 0, gameOver: false };
 
         function randPosCell() { return Math.floor(Math.random() * GRID) * CELL - WORLD_SIZE / 2; }
-        function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
-        function coll(a, b, r) { return dist(a, b) < r; }
+        // --- OPTIMIZATION: Distance Squared ---
+        function distSq(a, b) { const dx = a.x - b.x; const dy = a.y - b.y; return dx * dx + dy * dy; }
+        function dist(a, b) { return Math.sqrt(distSq(a, b)); }
+        function coll(a, b, r) { return distSq(a, b) < r * r; }
+        
         function normalizeAngle(angle) { return Math.atan2(Math.sin(angle), Math.cos(angle)); }
         function lerp(start, end, t) { return start * (1 - t) + end * t; }
-        function lerpAngle(a, b, t) { const da = (b - a) % (2 * Math.PI); const twoD = ((2 * da) % (2 * Math.PI)) - da; return a + twoD * t; }
+        function lerpAngle(a, b, t) { const da = (b - a) % TWO_PI; const twoD = ((2 * da) % TWO_PI) - da; return a + twoD * t; }
 
         function updateStatsUI() {
+            document.getElementById('stat-level').innerText = userStats.level;
             document.getElementById('stat-kills').innerText = userStats.totalKills;
             document.getElementById('stat-deaths').innerText = userStats.totalDeaths;
             document.getElementById('stat-best-size').innerText = userStats.bestScale.toFixed(1);
             document.getElementById('stat-games').innerText = userStats.gamesPlayed;
             document.getElementById('stat-mines').innerText = userStats.maxMinesInGame || 0;
             document.getElementById('stat-length').innerText = Math.round(userStats.bestLength);
+        }
+
+        // --- NEW XP SYSTEM ---
+        function gainXP(amount) {
+            userStats.currentXP += amount;
+            if (userStats.currentXP >= userStats.xpToNext) {
+                userStats.currentXP -= userStats.xpToNext;
+                userStats.level++;
+                userStats.xpToNext = Math.floor(userStats.xpToNext * 1.2);
+                playSound("levelup");
+                addFloatingText(canvas.width/2, canvas.height/2 - 100, `LEVEL UP! ${userStats.level}`, "#00FFFF", 40);
+            }
+            updateHUDXP();
+            localStorage.setItem('bosnia_snake_stats_v2', JSON.stringify(userStats));
+        }
+
+        function updateHUDXP() {
+            const pct = Math.min(100, (userStats.currentXP / userStats.xpToNext) * 100);
+            document.getElementById('xp-fill').style.width = pct + "%";
+            document.getElementById('xp-text').innerText = `${Math.floor(userStats.currentXP)} / ${userStats.xpToNext} XP`;
+            document.getElementById('level-badge').innerText = `LEVEL ${userStats.level}`;
+        }
+
+        function addFloatingText(x, y, text, color, fontSize=20) {
+            floatingTexts.push({
+                x: x, y: y, text: text, color: color, size: fontSize,
+                life: 1.0, dy: -1.0 - Math.random() // Float up
+            });
         }
 
         function isSkinUnlocked(skin) {
@@ -807,6 +924,7 @@
                     publish(); const hb = setInterval(publish, 5000); peer.on('disconnected', () => clearInterval(hb));
                 }
                 updateStats({ game: true });
+                updateHUDXP(); // Initialize XP bar
                 gameData.mode = "single";
                 gameData.players = [{
                     id: 0, active: true, x: 0, y: 0, angle: -Math.PI / 2, body: [], length: 140, dead: false, country: currentState.selectedSkin, colorBody: SKIN_BODY_COLORS[currentState.selectedSkin], scale: 18, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, minesExplodedCurrentGame: 0, name: currentState.playerName
@@ -826,7 +944,15 @@
         function initAdminServer() {
             if (peer) peer.destroy(); peer = new Peer({ debug: 1 });
             peer.on('open', (id) => {
-                currentState.myId = id; currentState.isHost = true; currentState.isDedicatedServer = true; currentState.isSpectating = false; currentState.isPlayingClient = false; currentState.myPlayerIndex = 0; currentState.menu = 'playing';
+                currentState.myId = id; 
+                currentState.isHost = true; 
+                currentState.isDedicatedServer = true; 
+                // --- SERVER HOST IS NOW A SPECTATOR, NO SNAKE SPAWNED ---
+                currentState.isSpectating = true; 
+                currentState.isPlayingClient = false; 
+                currentState.myPlayerIndex = -1; // No local player to track
+                currentState.menu = 'playing';
+                
                 cheats.godMode = true; document.getElementById('cheat-god').innerText = "God Mode: ON (SERVER)";
                 if(authReady) {
                     const docRef = doc(db, "active_games", id);
@@ -834,10 +960,11 @@
                     publish(); const hb = setInterval(publish, 4000); peer.on('disconnected', () => clearInterval(hb));
                 }
                 gameData.mode = "server";
-                gameData.players = [{
-                    id: 0, active: true, x: 0, y: 0, angle: -Math.PI/2, body: [], length: 500, dead: false, country: "bosnian_kingdom", colorBody: "#002395", scale: 40, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, minesExplodedCurrentGame: 0, name: "SERVER ADMIN"
-                }];
-                resetWorld(true); toggleUI('playing'); addChatMessage("System", "HOSTING OFFICIAL SERVER. ID: " + id, "gold");
+                gameData.players = []; // No Admin Snake
+                
+                resetWorld(true); 
+                toggleUI('playing'); addChatMessage("System", "HOSTING OFFICIAL SERVER. ID: " + id, "gold");
+                
                 peer.on('connection', (conn) => {
                     connections.push(conn);
                     conn.on('data', (data) => {
@@ -850,6 +977,27 @@
                             conn.playerId = newId;
                             conn.send({ type: "WELCOME", id: newId });
                         }
+                        // --- SERVER SIDE RESPAWN REQUEST HANDLING ---
+                        if (data.type === "RESPAWN_REQ" && conn.playerId) {
+                            const p = gameData.players.find(pl => pl.id === conn.playerId);
+                            if (p && p.dead) {
+                                p.dead = false;
+                                p.x = randPosCell();
+                                p.y = randPosCell();
+                                p.angle = Math.random() * Math.PI * 2;
+                                p.body = [];
+                                p.length = 140;
+                                p.scale = 18;
+                                p.kills = 0;
+                                p.deaths++;
+                                p.frozenUntil = Date.now() + 2000;
+                                p.abilityActive = false;
+                                p.lastAbilityTime = 0;
+                                p.maplePhase = null;
+                                p.kingdomPhase = null;
+                            }
+                        }
+                        // ------------------------------------------------
                         if (data.type === "INPUT" && conn.playerId) {
                             playerInputs[conn.playerId] = data.input;
                         }
@@ -887,6 +1035,7 @@
                      // Send Join Request
                      conn.send({ type: "JOIN", name: currentState.playerName, skin: currentState.selectedSkin });
                      currentState.menu = 'playing'; toggleUI('playing'); 
+                     updateHUDXP(); // Init XP bar for client (persists locally)
                      addChatMessage("System", "Joining Server...", "cyan"); 
                  });
                  conn.on('data', (data) => {
@@ -908,14 +1057,19 @@
                 p.x = randPosCell(); p.y = randPosCell(); p.body = []; p.length = 140; p.scale = 18; p.dead = false; p.frozenUntil = 0; p.abilityActive = false; p.lastAbilityTime = 0; p.maplePhase = null; p.kingdomPhase = null; p.minesExplodedCurrentGame = 0; p.barrageActive = false; p.barrageStartTime = 0; p.nextExplosionTime = 0; p.sovietBoost = false;
                 if (currentState.isDedicatedServer && p.id === 0) { p.scale = 50; p.length = 500; }
             });
-            s.enemies = []; if (spawnBots) { for (let i = 0; i < MAX_ENEMIES; i++) spawnOneEnemy(); }
+            s.enemies = []; 
+            // --- ONLY SPAWN BOTS IF NOT OFFICIAL SERVER OR IF FORCED ---
+            if (spawnBots && gameData.mode !== "server") { for (let i = 0; i < MAX_ENEMIES; i++) spawnOneEnemy(); }
         }
 
         function spawnOneEnemy() {
             const startLen = 140 + Math.random() * 100; const startWidth = 14;
             const player = gameData.players[0]; let isCroatia = false; if (player && player.scale > 100 && Math.random() < 0.08) { isCroatia = true; }
             const personality = isCroatia ? 'pure_aggro' : 'balanced';
-            gameData.enemies.push({ x: randPosCell(), y: randPosCell(), angle: Math.random() * Math.PI * 2, body: [], length: startLen, width: startWidth, baseScale: startWidth, speed: (2.5 + Math.random()) * 1.1, boostSpeed: isCroatia ? 16.0 : 8.5, turnSpeed: isCroatia ? 0.12 : 0.08, alive: true, color: isCroatia ? "#CC0000" : "#C6363C", country: isCroatia ? "croatia" : "serbia", frozenUntil: 0, personality: personality });
+            // INCREASED SPEED AND TURN RATE FOR KAMIKAZE BOTS
+            const speed = isCroatia ? 22.0 : (2.5 + Math.random()) * 1.1; 
+            const turn = isCroatia ? 0.20 : 0.08;
+            gameData.enemies.push({ x: randPosCell(), y: randPosCell(), angle: Math.random() * Math.PI * 2, body: [], length: startLen, width: startWidth, baseScale: startWidth, speed: speed, boostSpeed: speed, turnSpeed: turn, alive: true, color: isCroatia ? "#CC0000" : "#C6363C", country: isCroatia ? "croatia" : "serbia", frozenUntil: 0, personality: personality });
         }
 
         function getLocalInput() {
@@ -929,17 +1083,27 @@
 
         function updateHostLogic() {
             gameData.enemies = gameData.enemies.filter(e => e.alive);
-            if (gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.02) spawnOneEnemy();
+            
+            // --- FIX: DO NOT SPAWN AI IN OFFICIAL SERVER MODE ---
+            const isOfficialServer = gameData.mode === "server";
+            if (!isOfficialServer && gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.02) {
+                spawnOneEnemy();
+            }
+
+            // --- FIX: ALLOW DEDICATED SERVER HOST TO RESET EVEN WITHOUT PLAYER ENTITY ---
+            if (currentState.isDedicatedServer && keys['r']) {
+                resetWorld(true);
+            }
 
             // Iterate ALL players (Host + Connected Clients)
             gameData.players.forEach(p => {
                 if (p.dead) {
-                    if (p.id === 0 && keys['r']) { resetWorld(true); toggleUI('playing'); } // Host respawn world
+                    if (p.id === 0 && keys['r'] && !currentState.isDedicatedServer) { resetWorld(true); toggleUI('playing'); } // Host respawn world
                     return; 
                 }
 
                 let inp = { targetAngle: null, sprint: false, triggerAbility: false };
-                if (p.id === 0) inp = getLocalInput(); // Host Input
+                if (p.id === 0) inp = getLocalInput(); // Host Input (Skipped if host has no player in array)
                 else {
                     const remote = playerInputs[p.id];
                     if(remote) inp = remote; // Client Input
@@ -958,8 +1122,8 @@
             // AI Collision
             gameData.enemies.forEach(e => {
                 if(e.alive) {
-                    if (dist(p, e) < p.scale + e.width) killPlayer(p, null);
-                    for(let i=0; i<e.body.length; i+=3) { if(dist(p, e.body[i]) < p.scale + e.width - 5) { killPlayer(p, null); return; } }
+                    if (distSq(p, e) < (p.scale + e.width)**2) killPlayer(p, null);
+                    for(let i=0; i<e.body.length; i+=3) { if(distSq(p, e.body[i]) < (p.scale + e.width - 5)**2) { killPlayer(p, null); return; } }
                 }
             });
 
@@ -967,7 +1131,7 @@
             gameData.players.forEach(other => {
                 if(other.id !== p.id && !other.dead) {
                     // Head to Head (Biggest wins? or both die? Let's say both die to be safe/fair or rely on small delta)
-                    if (dist(p, other) < p.scale + other.scale) killPlayer(p, other);
+                    if (distSq(p, other) < (p.scale + other.scale)**2) killPlayer(p, other);
                     // Head to Body
                     for(let i=0; i<other.body.length; i+=3) {
                          if(coll(p, other.body[i], p.scale + other.scale - 5)) { killPlayer(p, other); return; }
@@ -980,7 +1144,7 @@
                 if (inp.sprint && !p.barrageActive && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000)) { p.barrageActive = true; p.barrageEndTime = now + 2000; p.nextExplosionTime = now; p.abilityActive = true; }
                 if (p.barrageActive) {
                     if (now >= p.barrageEndTime) { p.barrageActive = false; p.abilityActive = false; p.sovietBoost = false; p.lastAbilityTime = now; } 
-                    else { p.sovietBoost = true; if (now >= p.nextExplosionTime) { createExplosion(p.x, p.y, 3 * CELL); gameData.shakeIntensity = Math.min(60, gameData.shakeIntensity + 10); p.nextExplosionTime = now + 200; playSound("soviet_boom"); gameData.enemies.forEach(e => { if (e.alive && dist(e, p) < 3 * CELL) killEnemy(e, p); }); } }
+                    else { p.sovietBoost = true; if (now >= p.nextExplosionTime) { createExplosion(p.x, p.y, 3 * CELL); gameData.shakeIntensity = Math.min(60, gameData.shakeIntensity + 10); p.nextExplosionTime = now + 200; playSound("soviet_boom"); gameData.enemies.forEach(e => { if (e.alive && distSq(e, p) < (3 * CELL)**2) killEnemy(e, p); }); } }
                 }
             } else if (p.country === "golden_maple") {
                 if (inp.triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000) && !p.maplePhase) { p.maplePhase = "harvest"; p.phaseEndTime = now + 2500; p.lastAbilityTime = now; playSound("angelic"); }
@@ -990,15 +1154,15 @@
                 if (inp.triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > cooldown)) {
                     p.kingdomPhase = "active"; p.phaseEndTime = now + 1500; p.lastAbilityTime = now; playSound("soviet_boom");
                     const radius = 300;
-                    for (let i = gameData.food.length - 1; i >= 0; i--) { if (dist(p, gameData.food[i]) < radius) { gameData.food.splice(i, 1); gameData.mines.push({ x: p.x + (Math.random()-0.5)*50, y: p.y + (Math.random()-0.5)*50, state: "idle", type: "bosnian", ownerId: p.id, timer: 0.5, lastTick: now }); } }
-                    gameData.mines.forEach(m => { if (dist(p, m) < radius && m.type !== "bosnian") { m.type = "bosnian"; m.ownerId = p.id; m.state = "idle"; } });
-                    for(let i=0; i<8; i++) { const angle = (i / 8) * Math.PI * 2; gameData.mines.push({ x: p.x + Math.cos(angle) * 250, y: p.y + Math.sin(angle) * 250, state: "idle", type: "bosnian", ownerId: p.id, timer: 0.5, lastTick: now }); }
+                    for (let i = gameData.food.length - 1; i >= 0; i--) { if (distSq(p, gameData.food[i]) < radius * radius) { gameData.food.splice(i, 1); gameData.mines.push({ x: p.x + (Math.random()-0.5)*50, y: p.y + (Math.random()-0.5)*50, state: "idle", type: "bosnian", ownerId: p.id, timer: 0.5, lastTick: now }); } }
+                    gameData.mines.forEach(m => { if (distSq(p, m) < radius * radius && m.type !== "bosnian") { m.type = "bosnian"; m.ownerId = p.id; m.state = "idle"; } });
+                    for(let i=0; i<8; i++) { const angle = (i / 8) * TWO_PI; gameData.mines.push({ x: p.x + Math.cos(angle) * 250, y: p.y + Math.sin(angle) * 250, state: "idle", type: "bosnian", ownerId: p.id, timer: 0.5, lastTick: now }); }
                 }
                 if (p.kingdomPhase === "active" && now > p.phaseEndTime) p.kingdomPhase = null;
             }
 
             let speedMult = 1.0; let turnMult = 1.0;
-            gameData.syrupZones.forEach(zone => { if (dist(p, zone) < zone.radius && zone.ownerId !== p.id) { speedMult = 0.4; turnMult = 0.33; } });
+            gameData.syrupZones.forEach(zone => { if (distSq(p, zone) < zone.radius * zone.radius && zone.ownerId !== p.id) { speedMult = 0.4; turnMult = 0.33; } });
             if (inp.targetAngle !== null) { let d = normalizeAngle(inp.targetAngle - p.angle); const effectiveTurnSpeed = TURN_SPEED * turnMult; if (Math.abs(d) < effectiveTurnSpeed) p.angle = inp.targetAngle; else p.angle += d > 0 ? effectiveTurnSpeed : -effectiveTurnSpeed; p.angle = normalizeAngle(p.angle); }
             let s = BASE_SPEED * speedMult;
             if (p.id === 0 && cheats.speedHack) s = BASE_SPEED * 3; 
@@ -1015,19 +1179,48 @@
             state.enemies.forEach((enemy) => {
                 if (!enemy.alive) return; if (enemy.frozenUntil && now < enemy.frozenUntil) return;
                 if (!enemy.baseScale) enemy.baseScale = 12; const currentCalculatedWidth = 12 + Math.min(60, (enemy.length - 140) / 4); if (currentCalculatedWidth > enemy.baseScale) enemy.baseScale = currentCalculatedWidth; enemy.width = enemy.baseScale;
-                let aiSpeedMult = 1.0; let aiTurnMult = 1.0; state.syrupZones.forEach((zone) => { if (dist(enemy, zone) < zone.radius) { aiSpeedMult = 0.4; aiTurnMult = 0.33; } });
+                let aiSpeedMult = 1.0; let aiTurnMult = 1.0; state.syrupZones.forEach((zone) => { if (distSq(enemy, zone) < zone.radius * zone.radius) { aiSpeedMult = 0.4; aiTurnMult = 0.33; } });
                 let finalX = 0; let finalY = 0; let forceSprint = false;
                 const distFromCenter = dist(enemy, {x:0, y:0}); const mapEdge = WORLD_SIZE / 2; const safetyMargin = 300;
                 if (distFromCenter > mapEdge - safetyMargin) { const panicFactor = (distFromCenter - (mapEdge - safetyMargin)) / safetyMargin; const pullStrength = panicFactor * 5000; finalX -= enemy.x * pullStrength; finalY -= enemy.y * pullStrength; }
                 const mySizeMultiplier = Math.max(1, enemy.width / 15); const detectionRange = 200 * mySizeMultiplier; 
-                state.players.forEach(p => { if(!p.dead) { if (p.scale > enemy.width) { const d = dist(enemy, p); if (d < detectionRange + p.scale) { const push = 10000 / (d + 1); finalX -= (p.x - enemy.x) * push; finalY -= (p.y - enemy.y) * push; } } for(let i=0; i < p.body.length; i+=2) { const b = p.body[i]; const d = dist(enemy, b); if(d < detectionRange) { const push = (15000 * mySizeMultiplier) / (d + 1); finalX -= (b.x - enemy.x) * push; finalY -= (b.y - enemy.y) * push; } } } });
+                state.players.forEach(p => { 
+                    if(!p.dead) { 
+                        // KAMIKAZE BOTS IGNORE HEAD COLLISION AVOIDANCE
+                        if (p.scale > enemy.width && enemy.country !== 'croatia') { 
+                            const d = dist(enemy, p); 
+                            if (d < detectionRange + p.scale) { const push = 10000 / (d + 1); finalX -= (p.x - enemy.x) * push; finalY -= (p.y - enemy.y) * push; } 
+                        } 
+                        
+                        // KAMIKAZE BOTS AVOID BODIES HARDER TO GET TO HEAD
+                        for(let i=0; i < p.body.length; i+=2) { 
+                            const b = p.body[i]; const d = dist(enemy, b); 
+                            if(d < detectionRange) { 
+                                // Multiply push force for kamikaze bots to weave better
+                                const pushMult = (enemy.country === 'croatia') ? 35000 : 15000;
+                                const push = (pushMult * mySizeMultiplier) / (d + 1); 
+                                finalX -= (b.x - enemy.x) * push; finalY -= (b.y - enemy.y) * push; 
+                            } 
+                        } 
+                    } 
+                });
                 state.enemies.forEach(other => { if(other !== enemy && other.alive) { const d = dist(enemy, other); if(d < detectionRange) { const push = 5000 / (d + 1); finalX -= (other.x - enemy.x) * push; finalY -= (other.y - enemy.y) * push; } for (let i = 0; i < other.body.length; i += 4) { const b = other.body[i]; const bd = dist(enemy, b); if (bd < detectionRange) { const push = 8000 / (bd + 1); finalX -= (b.x - enemy.x) * push; finalY -= (b.y - enemy.y) * push; } } } });
                 state.mines.forEach(m => { const d = dist(enemy, m); if(d < detectionRange + 100) { const push = 12000 / (d + 1); finalX -= (m.x - enemy.x) * push; finalY -= (m.y - enemy.y) * push; if(m.state === 'triggered') forceSprint = true; } });
                 const isEvading = (Math.abs(finalX) > 2000 || Math.abs(finalY) > 2000);
                 if (!isEvading) {
                     let targetPlayer = null; let distToPlayer = Infinity;
                     state.players.forEach((p) => { if (!p.dead && p.active) { const d = dist(enemy, p); if(d < distToPlayer) { distToPlayer = d; targetPlayer = p; } } });
-                    if (enemy.country === 'croatia' && targetPlayer) { const dx = targetPlayer.x - enemy.x; const dy = targetPlayer.y - enemy.y; const leadX = dx + Math.cos(targetPlayer.angle) * distToPlayer * 0.3; const leadY = dy + Math.sin(targetPlayer.angle) * distToPlayer * 0.3; finalX += leadX * 8.0; finalY += leadY * 8.0; forceSprint = true; } 
+                    
+                    // KAMIKAZE LOGIC
+                    if (enemy.country === 'croatia' && targetPlayer) { 
+                        // Predict player movement to intercept head
+                        const dx = targetPlayer.x - enemy.x; 
+                        const dy = targetPlayer.y - enemy.y; 
+                        // Massive attraction to head, ignoring self-preservation
+                        finalX += dx * 15.0; 
+                        finalY += dy * 15.0; 
+                        forceSprint = true; 
+                    } 
                     else if (targetPlayer && distToPlayer < AGGRO_RADIUS && enemy.width > targetPlayer.scale) { finalX += (targetPlayer.x - enemy.x) * 2.0; finalY += (targetPlayer.y - enemy.y) * 2.0; if(Math.random() < 0.1) forceSprint = true; } 
                     else { let closestFood = null; let minFoodDist = Infinity; state.food.forEach((f) => { if (f.level < 2 && enemy.width > 50) return; const d = dist(enemy, f); if (d < minFoodDist && d < 800) { minFoodDist = d; closestFood = f; } }); if(closestFood) { finalX += (closestFood.x - enemy.x) * 1.5; finalY += (closestFood.y - enemy.y) * 1.5; } else { finalX += Math.cos(enemy.angle) * 200; finalY += Math.sin(enemy.angle) * 200; } }
                 }
@@ -1048,21 +1241,22 @@
         function updateEnvironment(activeEntities) {
             const s = gameData; const now = Date.now();
             for (let i = s.syrupZones.length - 1; i >= 0; i--) { if (now > s.syrupZones[i].expiresAt) s.syrupZones.splice(i, 1); }
-            for (let i = s.explosions.length - 1; i >= 0; i--) { s.explosions[i].radius += 15; s.explosions[i].alpha -= 0.05; if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1); }
+            // OPTIMIZATION: Faster explosion fade out
+            for (let i = s.explosions.length - 1; i >= 0; i--) { s.explosions[i].radius += 15; s.explosions[i].alpha -= 0.1; if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1); }
             if (s.food.length < 400) { for (let k = 0; k < 10; k++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); } }
-            activeEntities.forEach((p) => { if (p.country === "golden_maple" && p.maplePhase === "harvest") { s.food.forEach((f) => { if (dist(p, f) < 5 * CELL) f.isGolden = true; }); } });
-            s.food.forEach((f, i) => { const foodLevel = f.level || 1; const rad = FOOD_RADIUS_BASE + foodLevel * 1.5; activeEntities.forEach((p) => { if (!p.dead && coll(p, f, p.scale + rad)) { if (p.id === currentState.myPlayerIndex) playSound("eat"); s.food.splice(i, 1); const multiplier = f.isGolden ? 3 : 1; p.length += LENGTH_GAIN * multiplier; p.scale = Math.min(2000, p.scale + foodLevel * SIZE_GAIN_PER_LEVEL * multiplier); } }); });
+            activeEntities.forEach((p) => { if (p.country === "golden_maple" && p.maplePhase === "harvest") { s.food.forEach((f) => { if (distSq(p, f) < (5 * CELL)**2) f.isGolden = true; }); } });
+            s.food.forEach((f, i) => { const foodLevel = f.level || 1; const rad = FOOD_RADIUS_BASE + foodLevel * 1.5; activeEntities.forEach((p) => { if (!p.dead && coll(p, f, p.scale + rad)) { if (p.id === currentState.myPlayerIndex) { playSound("eat"); gainXP(foodLevel * 2); } s.food.splice(i, 1); const multiplier = f.isGolden ? 3 : 1; p.length += LENGTH_GAIN * multiplier; p.scale = Math.min(2000, p.scale + foodLevel * SIZE_GAIN_PER_LEVEL * multiplier); } }); });
             for (let i = s.mines.length - 1; i >= 0; i--) {
                 let m = s.mines[i]; const isBosnian = m.type === "bosnian"; const triggerRadius = 200; const explodeRadius = isBosnian ? 900 : 300; const delay = isBosnian ? 500 : 3000;
-                if (m.state === "idle") { let triggered = false; let triggerer = null; activeEntities.forEach((p) => { if (!p.dead) { if (isBosnian && p.id === m.ownerId) return; if (dist(p, m) < triggerRadius) { triggered = true; triggerer = p; } } }); if (triggered) { m.state = "triggered"; m.lastTick = now; if (triggerer && triggerer.id === currentState.myPlayerIndex && !isBosnian) { triggerer.minesExplodedCurrentGame = (triggerer.minesExplodedCurrentGame || 0) + 1; updateStats({ minesExploded: triggerer.minesExplodedCurrentGame }); } } } 
-                else if (m.state === "triggered") { if (now - m.lastTick > delay) { createExplosion(m.x, m.y, isBosnian ? 200 : 10); activeEntities.forEach((p) => { if (!p.dead) { if (isBosnian && p.id === m.ownerId) return; if (dist(p, m) < explodeRadius) { if(p.id !== undefined) killPlayer(p, null); else killEnemy(p, null); } } }); s.mines.splice(i, 1); } }
+                if (m.state === "idle") { let triggered = false; let triggerer = null; activeEntities.forEach((p) => { if (!p.dead) { if (isBosnian && p.id === m.ownerId) return; if (distSq(p, m) < triggerRadius * triggerRadius) { triggered = true; triggerer = p; } } }); if (triggered) { m.state = "triggered"; m.lastTick = now; if (triggerer && triggerer.id === currentState.myPlayerIndex && !isBosnian) { triggerer.minesExplodedCurrentGame = (triggerer.minesExplodedCurrentGame || 0) + 1; updateStats({ minesExploded: triggerer.minesExplodedCurrentGame }); } } } 
+                else if (m.state === "triggered") { if (now - m.lastTick > delay) { createExplosion(m.x, m.y, isBosnian ? 200 : 10); activeEntities.forEach((p) => { if (!p.dead) { if (isBosnian && p.id === m.ownerId) return; if (distSq(p, m) < explodeRadius * explodeRadius) { if(p.id !== undefined) killPlayer(p, null); else killEnemy(p, null); } } }); s.mines.splice(i, 1); } }
             }
         }
 
         function createExplosion(x, y, radius = 10) {
             gameData.explosions.push({ x, y, radius: radius, alpha: 1.0 });
             const p = gameData.players.find(p => p.id === currentState.myPlayerIndex);
-            if (p && !p.dead && dist(p, {x, y}) < 1500) { gameData.shakeIntensity = Math.min(100, gameData.shakeIntensity + 30); }
+            if (p && !p.dead && distSq(p, {x, y}) < 1500 * 1500) { gameData.shakeIntensity = Math.min(100, gameData.shakeIntensity + 30); }
         }
 
         function killPlayer(victim, killer) {
@@ -1071,7 +1265,14 @@
             
             victim.dead = true; victim.deaths++; victim.abilityActive = false; victim.maplePhase = null; victim.kingdomPhase = null;
             if (victim.id === currentState.myPlayerIndex) { updateStats({ death: true, scale: victim.scale, length: victim.length }); submitScoreToLeaderboard(victim.scale); toggleUI('death'); }
-            if (killer) { killer.kills++; if (killer.id === currentState.myPlayerIndex) updateStats({ kill: true }); }
+            if (killer) { 
+                killer.kills++; 
+                if (killer.id === currentState.myPlayerIndex) {
+                    updateStats({ kill: true });
+                    gainXP(100);
+                    addFloatingText(killer.x, killer.y, "KILL! +100 XP", "#FF0000", 30);
+                }
+            }
             createExplosion(victim.x, victim.y);
             const totalValue = victim.length * 0.4; const foodCount = Math.max(3, Math.floor(totalValue / LENGTH_GAIN));
             for (let k = 0; k < foodCount; k++) { const index = Math.floor(Math.random() * victim.body.length); if (victim.body[index]) { gameData.food.push({ x: victim.body[index].x, y: victim.body[index].y, level: Math.floor(Math.random() * 3) + 1 }); } }
@@ -1079,7 +1280,14 @@
 
         function killEnemy(e, killer) {
             if (!e.alive) return; e.alive = false;
-            if (killer) { killer.kills++; if (killer.id === currentState.myPlayerIndex) updateStats({ kill: true }); }
+            if (killer) { 
+                killer.kills++; 
+                if (killer.id === currentState.myPlayerIndex) {
+                    updateStats({ kill: true }); 
+                    gainXP(50);
+                    addFloatingText(killer.x, killer.y, "BOT KILL! +50 XP", "#FFA500", 25);
+                }
+            }
             createExplosion(e.x, e.y);
             const totalValue = e.length * 0.4; const foodCount = Math.max(3, Math.floor(totalValue / LENGTH_GAIN)); const stepSize = Math.max(1, Math.floor(e.body.length / foodCount));
             for (let i = 0; i < e.body.length; i += stepSize) { const point = e.body[i]; if(point) gameData.food.push({ x: point.x + (Math.random() - 0.5) * 20, y: point.y + (Math.random() - 0.5) * 20, level: Math.floor(Math.random() * 3) + 1 }); }
@@ -1096,7 +1304,8 @@
                     id: p.id, active: p.active, dead: p.dead, x: Math.round(p.x), y: Math.round(p.y),
                     angle: Number(p.angle.toFixed(2)), scale: Number(p.scale.toFixed(2)), length: Math.round(p.length),
                     country: p.country, colorBody: p.colorBody, kills: p.kills, deaths: p.deaths,
-                    frozenUntil: p.frozenUntil || 0, abilityActive: p.abilityActive || false, maplePhase: p.maplePhase, kingdomPhase: p.kingdomPhase, name: p.name
+                    // SENDING LAST ABILITY TIME (lat) FOR GUI COUNTDOWN
+                    frozenUntil: p.frozenUntil || 0, abilityActive: p.abilityActive || false, lat: p.lastAbilityTime, maplePhase: p.maplePhase, kingdomPhase: p.kingdomPhase, name: p.name
                 })),
                 enemies: state.enemies.map((e) => ({ alive: e.alive, color: e.color, width: Math.round(e.width), x: Math.round(e.x), y: Math.round(e.y), angle: Number(e.angle.toFixed(2)), frozenUntil: e.frozenUntil || 0 })),
             };
@@ -1124,6 +1333,8 @@
                     const existing = cur.players.find(p => p.id === tp.id);
                     if(existing) {
                         existing.x = lerp(existing.x, tp.x, t); existing.y = lerp(existing.y, tp.y, t); existing.angle = lerpAngle(existing.angle, tp.angle, t); existing.scale = tp.scale; existing.country = tp.country; existing.dead = tp.dead; existing.name = tp.name; existing.abilityActive = tp.abilityActive; existing.maplePhase = tp.maplePhase; existing.kingdomPhase = tp.kingdomPhase;
+                        // RECEIVE LAST ABILITY TIME FOR GUI
+                        if(tp.lat) existing.lastAbilityTime = tp.lat;
                         if (!existing.body) existing.body = []; existing.body.unshift({ x: existing.x, y: existing.y }); while (existing.body.length > tp.length) existing.body.pop();
                         return existing;
                     }
@@ -1138,8 +1349,16 @@
                     hostConn.send({ type: "INPUT", input: inp });
                     // Death Logic for Client
                     const me = cur.players.find(p => p.id === currentState.myPlayerIndex);
-                    if (me && me.dead && currentState.menu !== 'death') {
-                        toggleUI('death');
+                    if (me && me.dead) {
+                         if (currentState.menu !== 'death') toggleUI('death');
+                         // SEND RESPAWN REQUEST IF DEAD AND R PRESSED
+                         if (keys['r']) {
+                             hostConn.send({ type: "RESPAWN_REQ" });
+                         }
+                    }
+                    // Reset UI if revived
+                    if (me && !me.dead && currentState.menu === 'death') {
+                        toggleUI('playing');
                     }
                 }
             }
@@ -1165,37 +1384,78 @@
             const focus = (currentState.isSpectating && gameData.players.length > 0) ? gameData.players[0] : (me.x !== undefined ? me : {x:0, y:0, scale:18});
             const startScale = 18; const zoom = Math.max(0.1, 0.6 * (30 / (30 + ((focus.scale || 18) - startScale) * 0.4)));
             ctx.scale(zoom, zoom); ctx.translate(-focus.x, -focus.y);
+            
+            // --- OPTIMIZATION: View Culling ---
+            const vw = canvas.width / zoom; const vh = canvas.height / zoom;
+            const viewLeft = focus.x - vw/2 - 1000; const viewRight = focus.x + vw/2 + 1000;
+            const viewTop = focus.y - vh/2 - 1000; const viewBottom = focus.y + vh/2 + 1000;
+
             ctx.lineWidth = 12; ctx.strokeStyle = "rgba(255,0,0,0.9)"; ctx.strokeRect(-WORLD_SIZE / 2, -WORLD_SIZE / 2, WORLD_SIZE, WORLD_SIZE);
             if (me.country === "ireland" && !me.dead) { ctx.save(); ctx.strokeStyle = "rgba(0, 255, 0, 0.5)"; ctx.lineWidth = 2; ctx.setLineDash([10, 10]); gameData.enemies.forEach(e => { if (e.alive) { ctx.beginPath(); ctx.moveTo(me.x, me.y); ctx.lineTo(e.x, e.y); ctx.stroke(); } }); ctx.restore(); }
-            gameData.syrupZones.forEach((z) => { ctx.fillStyle = "rgba(184, 134, 11, 0.5)"; ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#DAA520"; ctx.lineWidth = 4; ctx.stroke(); });
-            gameData.food.forEach((f) => { const level = f.level || 1; const size = FOOD_RADIUS_BASE + level * 1.5; if (f.isGolden) { ctx.fillStyle = "#FFD700"; ctx.shadowColor = "#FFD700"; ctx.shadowBlur = 10; } else { ctx.fillStyle = "orange"; ctx.shadowBlur = 0; } ctx.beginPath(); ctx.arc(f.x, f.y, size, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; if (level > 8) { ctx.globalAlpha = 0.3; ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(f.x, f.y, size + 3, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1.0; } });
+            gameData.syrupZones.forEach((z) => { ctx.fillStyle = "rgba(184, 134, 11, 0.5)"; ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = "#DAA520"; ctx.lineWidth = 4; ctx.stroke(); });
+            
+            gameData.food.forEach((f) => { 
+                if (f.x < viewLeft || f.x > viewRight || f.y < viewTop || f.y > viewBottom) return; // Culling
+                const level = f.level || 1; const size = FOOD_RADIUS_BASE + level * 1.5; 
+                // OPTIMIZATION: Removed ShadowBlur, use manual glow for Golden Food
+                if (f.isGolden) { 
+                    ctx.fillStyle = "rgba(255, 215, 0, 0.4)"; ctx.beginPath(); ctx.arc(f.x, f.y, size+5, 0, TWO_PI); ctx.fill(); // Fake glow
+                    ctx.fillStyle = "#FFD700"; 
+                } else { ctx.fillStyle = "orange"; } 
+                ctx.beginPath(); ctx.arc(f.x, f.y, size, 0, TWO_PI); ctx.fill(); 
+                if (level > 8) { ctx.globalAlpha = 0.3; ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(f.x, f.y, size + 3, 0, TWO_PI); ctx.fill(); ctx.globalAlpha = 1.0; } 
+            });
+
             gameData.mines.forEach((m) => {
-                if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) { ctx.fillStyle = "rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, Math.PI * 2); ctx.fill(); }
+                if (m.x < viewLeft || m.x > viewRight || m.y < viewTop || m.y > viewBottom) return; // Culling
+                if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) { ctx.fillStyle = "rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, TWO_PI); ctx.fill(); }
                 const r = 25; const d = r * 2;
-                if (m.type === "bosnian") { ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = "#002395"; ctx.fillRect(m.x-r, m.y-r, r*2, r*2); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(m.x, m.y, r/2, 0, Math.PI*2); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#FFD700"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.stroke(); return; }
-                ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.clip(); ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3); ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3); ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(m.x - 10, m.y - 10); ctx.lineTo(m.x, m.y - 10); ctx.lineTo(m.x, m.y + 5); ctx.lineTo(m.x - 5, m.y + 12); ctx.lineTo(m.x - 10, m.y + 5); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#333"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI * 2); ctx.stroke();
+                if (m.type === "bosnian") { ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#002395"; ctx.fillRect(m.x-r, m.y-r, r*2, r*2); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(m.x, m.y, r/2, 0, TWO_PI); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#FFD700"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke(); return; }
+                ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3); ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3); ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(m.x - 10, m.y - 10); ctx.lineTo(m.x, m.y - 10); ctx.lineTo(m.x, m.y + 5); ctx.lineTo(m.x - 5, m.y + 12); ctx.lineTo(m.x - 10, m.y + 5); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#333"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke();
             });
 
             const allEntities = [...gameData.players, ...gameData.enemies];
             allEntities.forEach((p) => {
                 if (p.dead || p.alive === false) return;
-                if (p.frozenUntil && Date.now() < p.frozenUntil) { ctx.shadowBlur = 15; ctx.shadowColor = "cyan"; } else if (p.country === "soviet" && p.abilityActive) { ctx.shadowBlur = 30; ctx.shadowColor = "#FF0000"; } else if (p.country === "golden_maple" && p.maplePhase === "harvest") { ctx.shadowBlur = 40; ctx.shadowColor = "#DAA520"; ctx.strokeStyle = "rgba(218, 165, 32, 0.4)"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(p.x, p.y, 5 * CELL, 0, Math.PI * 2); ctx.stroke(); }
-                if (p.country === "bosnian_kingdom" && p.kingdomPhase === "active") { ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, 300, 0, Math.PI*2); ctx.strokeStyle = "rgba(0, 35, 149, 0.6)"; ctx.lineWidth = 10; ctx.stroke(); ctx.fillStyle = "rgba(0, 35, 149, 0.2)"; ctx.fill(); ctx.restore(); }
-                const bodyW = p.scale || p.width || 12; ctx.lineWidth = bodyW * 1.2; ctx.strokeStyle = (p.frozenUntil && Date.now() < p.frozenUntil) ? "cyan" : (p.colorBody || p.color || "white"); ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); if (p.body.length) { ctx.moveTo(p.body[0].x, p.body[0].y); p.body.forEach(b => ctx.lineTo(b.x, b.y)); ctx.stroke(); } ctx.shadowBlur = 0;
-                const r = bodyW * 0.65; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle + Math.PI / 2); ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.clip();
+                // Culling Check (Aggressive but safe due to padding)
+                if (p.x < viewLeft - p.length && p.x > viewRight + p.length && p.y < viewTop - p.length && p.y > viewBottom + p.length) return; 
+
+                // OPTIMIZATION: Use manual circles instead of shadowBlur for effects
+                if (p.frozenUntil && Date.now() < p.frozenUntil) { ctx.fillStyle="rgba(0, 255, 255, 0.4)"; ctx.beginPath(); ctx.arc(p.x, p.y, (p.scale||12)+10, 0, TWO_PI); ctx.fill(); } 
+                else if (p.country === "soviet" && p.abilityActive) { ctx.fillStyle="rgba(255, 0, 0, 0.4)"; ctx.beginPath(); ctx.arc(p.x, p.y, (p.scale||12)+20, 0, TWO_PI); ctx.fill(); } 
+                else if (p.country === "golden_maple" && p.maplePhase === "harvest") { ctx.strokeStyle = "rgba(218, 165, 32, 0.4)"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(p.x, p.y, 5 * CELL, 0, TWO_PI); ctx.stroke(); }
+                
+                if (p.country === "bosnian_kingdom" && p.kingdomPhase === "active") { ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, 300, 0, TWO_PI); ctx.strokeStyle = "rgba(0, 35, 149, 0.6)"; ctx.lineWidth = 10; ctx.stroke(); ctx.fillStyle = "rgba(0, 35, 149, 0.2)"; ctx.fill(); ctx.restore(); }
+                
+                const bodyW = p.scale || p.width || 12; ctx.lineWidth = bodyW * 1.2; ctx.strokeStyle = (p.frozenUntil && Date.now() < p.frozenUntil) ? "cyan" : (p.colorBody || p.color || "white"); ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); if (p.body.length) { ctx.moveTo(p.body[0].x, p.body[0].y); p.body.forEach(b => ctx.lineTo(b.x, b.y)); ctx.stroke(); } 
+                const r = bodyW * 0.65; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle + Math.PI / 2); ctx.beginPath(); ctx.arc(0, 0, r, 0, TWO_PI); ctx.clip();
                 drawFlag(ctx, p.country, r, p.color); ctx.restore();
                 if(p.name && zoom > 0.3) { ctx.fillStyle = "white"; ctx.font = `bold ${Math.max(12, r)}px Arial`; ctx.textAlign = "center"; ctx.fillText(p.name, p.x, p.y - r - 10); }
             });
 
-            gameData.explosions.forEach((ex) => { ctx.fillStyle = `rgba(255,69,0,${ex.alpha})`; ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius, 0, Math.PI * 2); ctx.fill(); });
+            gameData.explosions.forEach((ex) => { ctx.fillStyle = `rgba(255,69,0,${ex.alpha})`; ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius, 0, TWO_PI); ctx.fill(); });
+            
+            // DRAW FLOATING TEXTS
+            for(let i = floatingTexts.length - 1; i >= 0; i--) {
+                let ft = floatingTexts[i];
+                ft.y += ft.dy;
+                ft.life -= 0.02;
+                ctx.globalAlpha = Math.max(0, ft.life);
+                ctx.fillStyle = ft.color;
+                ctx.font = `bold ${ft.size}px Arial`;
+                ctx.fillText(ft.text, ft.x, ft.y);
+                ctx.globalAlpha = 1.0;
+                if(ft.life <= 0) floatingTexts.splice(i, 1);
+            }
+
             ctx.restore();
         }
 
         function drawFlag(ctx, country, r, fallbackColor) {
             const rect = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
             if (!country) { ctx.fillStyle = fallbackColor || "white"; ctx.fillRect(-r, -r, r * 2, r * 2); return; }
-            if (country === 'bosnia') { rect(-r, -r, r * 2, r * 2, "#002F6C"); ctx.fillStyle = "#FECB00"; ctx.beginPath(); ctx.moveTo(r * 0.2, -r); ctx.lineTo(r * 0.2, r); ctx.lineTo(r, -r * 0.5); ctx.fill(); ctx.fillStyle = "white"; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.6 + i * r * 0.4, r * 0.1, 0, Math.PI * 2); ctx.fill(); } }
-            else if (country === 'bosnian_kingdom') { rect(-r, -r, r * 2, r * 2, "#002395"); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(-r, -r); ctx.lineTo(r, r); ctx.lineTo(r, r-r/2); ctx.lineTo(-r+r/2, -r); ctx.fill(); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r/2, r/2, r/4, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(r/2, -r/2, r/4, 0, Math.PI*2); ctx.fill(); }
+            if (country === 'bosnia') { rect(-r, -r, r * 2, r * 2, "#002F6C"); ctx.fillStyle = "#FECB00"; ctx.beginPath(); ctx.moveTo(r * 0.2, -r); ctx.lineTo(r * 0.2, r); ctx.lineTo(r, -r * 0.5); ctx.fill(); ctx.fillStyle = "white"; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.6 + i * r * 0.4, r * 0.1, 0, TWO_PI); ctx.fill(); } }
+            else if (country === 'bosnian_kingdom') { rect(-r, -r, r * 2, r * 2, "#002395"); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(-r, -r); ctx.lineTo(r, r); ctx.lineTo(r, r-r/2); ctx.lineTo(-r+r/2, -r); ctx.fill(); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r/2, r/2, r/4, 0, TWO_PI); ctx.fill(); ctx.beginPath(); ctx.arc(r/2, -r/2, r/4, 0, TWO_PI); ctx.fill(); }
             else if (country === 'russia') { rect(-r, -r, r * 2, (r * 2) / 3, "white"); rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0039A6"); rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "#D52B1E"); }
             else if (country === 'croatia') { rect(-r, -r, r*2, (r*2)/3, "red"); rect(-r, -r+(r*2)/3, r*2, (r*2)/3, "white"); rect(-r, -r+4*r/3, r*2, (r*2)/3, "blue"); ctx.fillStyle = "red"; ctx.fillRect(-r/2, -r/2, r, r); ctx.fillStyle = "white"; for(let y=0; y<2; y++) for(let x=0; x<2; x++) { if((x+y)%2===0) ctx.fillRect(-r/2 + x*(r/2), -r/2 + y*(r/2), r/2, r/2); } }
             else if (country === 'serbia') { rect(-r, -r, r * 2, (r * 2) / 3, "#C6363C"); rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0C4076"); rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "white"); }
@@ -1206,12 +1466,22 @@
             else if (country === 'ukraine') { rect(-r, -r, r * 2, r, "#0057B8"); rect(-r, 0, r * 2, r, "#FFD700"); }
             else if (country === 'poland') { rect(-r, -r, r * 2, r, "white"); rect(-r, 0, r * 2, r, "#DC143C"); }
             else if (country === 'canada') { rect(-r, -r, (r * 2) / 4, r * 2, "#FF0000"); rect(-r + (r * 2) / 4, -r, r, r * 2, "white"); rect(r / 2, -r, (r * 2) / 4, r * 2, "#FF0000"); ctx.fillStyle = "#FF0000"; ctx.beginPath(); ctx.moveTo(0, -r * 0.4); ctx.lineTo(r * 0.3, 0); ctx.lineTo(0, r * 0.4); ctx.lineTo(-r * 0.3, 0); ctx.fill(); }
-            else if (country === 'usa') { rect(-r, -r, r * 2, r * 2, "white"); for (let i = 0; i < 7; i++) rect(-r, -r + (i * 2 * r / 7), r * 2, r / 7, "#B22234"); rect(-r, -r, r, r * 0.8, "#3C3B6E"); ctx.fillStyle = "white"; for (let py = 0; py < 3; py++) for (let px = 0; px < 4; px++) { ctx.beginPath(); ctx.arc(-r + 5 + px * (r / 4), -r + 5 + py * (r / 4), 2, 0, Math.PI * 2); ctx.fill(); } }
-            else if (country === 'soviet') { rect(-r, -r, r * 2, r * 2, "#CC0000"); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r * 0.4, -r * 0.4, r * 0.25, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = "#FFD700"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(-r * 0.4, -r * 0.2, r * 0.2, 0, Math.PI); ctx.stroke(); }
+            else if (country === 'usa') { rect(-r, -r, r * 2, r * 2, "white"); for (let i = 0; i < 7; i++) rect(-r, -r + (i * 2 * r / 7), r * 2, r / 7, "#B22234"); rect(-r, -r, r, r * 0.8, "#3C3B6E"); ctx.fillStyle = "white"; for (let py = 0; py < 3; py++) for (let px = 0; px < 4; px++) { ctx.beginPath(); ctx.arc(-r + 5 + px * (r / 4), -r + 5 + py * (r / 4), 2, 0, TWO_PI); ctx.fill(); } }
+            else if (country === 'soviet') { rect(-r, -r, r * 2, r * 2, "#CC0000"); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r * 0.4, -r * 0.4, r * 0.25, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = "#FFD700"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(-r * 0.4, -r * 0.2, r * 0.2, 0, Math.PI); ctx.stroke(); }
             else if (country === 'golden_maple') { rect(-r, -r, r*2, r*2, "white"); rect(-r, -r, (r*2)/4, r*2, "#FFFF00"); rect(r/2, -r, (r*2)/4, r*2, "#FFFF00"); ctx.fillStyle = "#FFFF00"; ctx.beginPath(); ctx.moveTo(0, -r * 0.4); ctx.lineTo(r * 0.3, 0); ctx.lineTo(0, r * 0.4); ctx.lineTo(-r * 0.3, 0); ctx.fill(); }
             else if (country === 'sweden') { rect(-r, -r, r * 2, r * 2, "#006AA7"); rect(-r, -r * 0.2, r * 2, r * 0.4, "#FECC00"); rect(-r * 0.2, -r, r * 0.4, r * 2, "#FECC00"); }
             else if (country === 'denmark') { rect(-r, -r, r * 2, r * 2, "#C60C30"); rect(-r, -r * 0.2, r * 2, r * 0.4, "white"); rect(-r * 0.2, -r, r * 0.4, r * 2, "white"); }
             else if (country === 'uk') { rect(-r, -r, r * 2, r * 2, "#012169"); rect(-r, -r * 0.3, r * 2, r * 0.6, "white"); rect(-r * 0.3, -r, r * 0.6, r * 2, "white"); rect(-r, -r * 0.15, r * 2, r * 0.3, "#C8102E"); rect(-r * 0.15, -r, r * 0.3, r * 2, "#C8102E"); }
+            
+            // --- NEW EUROPEAN SKINS ---
+            else if (country === 'spain') { rect(-r, -r, r * 2, r * 2, "#AA151B"); rect(-r, -r * 0.5, r * 2, r, "#F1BF00"); }
+            else if (country === 'netherlands') { rect(-r, -r, r * 2, r * 2 / 3, "#AE1C28"); rect(-r, -r + r * 2 / 3, r * 2, r * 2 / 3, "white"); rect(-r, -r + 4 * r / 3, r * 2, r * 2 / 3, "#21468B"); }
+            else if (country === 'greece') { rect(-r, -r, r * 2, r * 2, "#0D5EAF"); for (let i = 0; i < 9; i++) { if (i % 2 !== 0) rect(-r, -r + (i * 2 * r / 9), r * 2, 2 * r / 9, "white"); } rect(-r, -r, r, r, "#0D5EAF"); rect(-r, -r + r * 0.4, r, r * 0.2, "white"); rect(-r + r * 0.4, -r, r * 0.2, r, "white"); }
+            else if (country === 'switzerland') { rect(-r, -r, r * 2, r * 2, "#FF0000"); rect(-r + r * 0.8, -r + r * 0.2, r * 0.4, r * 1.6, "white"); rect(-r + r * 0.2, -r + r * 0.8, r * 1.6, r * 0.4, "white"); }
+            else if (country === 'norway') { rect(-r, -r, r * 2, r * 2, "#BA0C2F"); rect(-r, -r + r * 0.8, r * 2, r * 0.4, "white"); rect(-r + r * 0.6, -r, r * 0.4, r * 2, "white"); rect(-r, -r + r * 0.9, r * 2, r * 0.2, "#00205B"); rect(-r + r * 0.7, -r, r * 0.2, r * 2, "#00205B"); }
+            else if (country === 'finland') { rect(-r, -r, r * 2, r * 2, "white"); rect(-r, -r + r * 0.8, r * 2, r * 0.4, "#003580"); rect(-r + r * 0.6, -r, r * 0.4, r * 2, "#003580"); }
+            else if (country === 'portugal') { rect(-r, -r, r * 0.8, r * 2, "#046A38"); rect(-r + r * 0.8, -r, r * 1.2, r * 2, "#DA291C"); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r * 0.2, 0, r * 0.4, 0, TWO_PI); ctx.fill(); }
+            
             else { rect(-r, -r, r * 2, r * 2, fallbackColor || "#333"); }
         }
 
@@ -1275,6 +1545,18 @@
         window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
         window.addEventListener('resize', () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; });
 
+        // --- GLOBAL MOUSE HANDLER TO FIX CHAT FOCUS ---
+        window.addEventListener('mousedown', (e) => {
+            const chatContainer = document.getElementById('chat-container');
+            const chatInput = document.getElementById('chat-input');
+            // If clicking inside the container or input, do NOT blur.
+            if (chatContainer.contains(e.target) || e.target === chatInput) return;
+            // If clicking outside, blur.
+            if (document.activeElement === chatInput) {
+                chatInput.blur();
+            }
+        });
+
         document.getElementById('btn-play').onclick = initSinglePlayer;
         document.getElementById('btn-mouse').onclick = () => { currentState.controlMode = 'mouse'; document.getElementById('btn-mouse').classList.add('active'); document.getElementById('btn-keyboard').classList.remove('active'); };
         document.getElementById('btn-keyboard').onclick = () => { currentState.controlMode = 'keyboard'; document.getElementById('btn-keyboard').classList.add('active'); document.getElementById('btn-mouse').classList.remove('active'); };
@@ -1288,7 +1570,9 @@
             if (code === "Ireland_isgreat") { if(!isSkinUnlocked('ireland')) { updateStats({ unlockSecret: "ireland" }); alert("SUCCESS: Ireland Skin Unlocked!"); renderSkinGrid(); } else alert("Already Unlocked"); } else alert("Invalid Code");
         };
 
-        document.getElementById('chat-input').onkeydown = (e) => {
+        const chatInputEl = document.getElementById('chat-input');
+        chatInputEl.addEventListener('keydown', (e) => {
+            e.stopPropagation(); // Prevent game inputs (like W/A/S/D) from triggering while typing
             if (e.key === 'Enter') {
                 const text = e.target.value;
                 if (text.trim()) {
@@ -1297,7 +1581,10 @@
                 }
                 e.target.value = ''; document.getElementById('game-canvas').focus();
             }
-        };
+            if (e.key === 'Escape') {
+                e.target.blur();
+            }
+        });
 
         document.getElementById('btn-admin-open').onclick = () => { showOwnerLogin = true; document.getElementById('owner-login-panel').style.display = 'block'; document.getElementById('owner-password').focus(); };
         document.getElementById('btn-owner-close').onclick = () => { showOwnerLogin = false; document.getElementById('owner-login-panel').style.display = 'none'; };
@@ -1320,3 +1607,4 @@
     </script>
 </body>
 </html>
+```
