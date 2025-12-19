@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: Kamikaze Update</title>
+    <title>Bosnia Snake: Serbia & Croatia Bots</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -1123,7 +1123,7 @@
             if (spawnBots && gameData.mode !== "server") { for (let i = 0; i < MAX_ENEMIES; i++) spawnOneEnemy(); }
         }
 
-        // --- SPAWN ONE ENEMY: NOW WITH KAMIKAZE 5% ROLL ---
+        // --- SPAWN ONE ENEMY: UPDATED FOR STRICT SKINS ---
         function spawnOneEnemy() {
             // Check max size of any player to unlock Kamikaze
             let maxPlayerScale = 0;
@@ -1139,17 +1139,14 @@
             const speed = isKamikaze ? 25.0 : (2.5 + Math.random()) * 1.1; 
             const turn = isKamikaze ? 0.30 : 0.08;
             
-            // Appearance
-            let country = SKINS_NORMAL[Math.floor(Math.random() * SKINS_NORMAL.length)];
-            let color = "#fff";
+            // Appearance logic: Kamikaze -> Croatia, Normal -> Serbia
+            let country = "serbia"; 
+            let color = "#C6363C"; // Serbia Red
             
             if (isKamikaze) {
-                country = "croatia"; // Reuse aggressive looking skin or assign specific
-                color = "#8B0000";   // Dark Red Body
-            } else if (maxPlayerScale > 100 && Math.random() < 0.08) {
-                // "Croatia Aggro" legacy behavior kept for flavor
-                country = "croatia";
-            }
+                country = "croatia"; 
+                color = "#CC0000";   // Croatia Red (slightly darker/vibrant)
+            } 
 
             gameData.enemies.push({ 
                 type: isKamikaze ? 'kamikaze' : 'normal',
@@ -1302,7 +1299,7 @@
                 let forceSprint = false;
 
                 // -----------------------------
-                // CASE 1: KAMIKAZE AI
+                // CASE 1: KAMIKAZE AI (Croatia)
                 // -----------------------------
                 if (enemy.type === 'kamikaze') {
                     // Find largest player > 100
@@ -1351,7 +1348,7 @@
                     }
                 } 
                 // -----------------------------
-                // CASE 2: NORMAL AI
+                // CASE 2: NORMAL AI (Serbia)
                 // -----------------------------
                 else {
                     // --- 1. WANDER TARGET SYSTEM (Linear Motion) ---
