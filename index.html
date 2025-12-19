@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: Fadeaway Update</title>
+    <title>Bosnia Snake: Realistic Physics Update</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -1278,14 +1278,17 @@
             const s = gameData; const now = Date.now();
             for (let i = s.syrupZones.length - 1; i >= 0; i--) { if (now > s.syrupZones[i].expiresAt) s.syrupZones.splice(i, 1); }
             
-            // --- UPDATED EXPLOSION LOGIC ---
-            // Slower fade (1.5 seconds) and steady smoke-like expansion
+            // --- UPDATED EXPLOSION LOGIC (Non-Linear Expansion) ---
             for (let i = s.explosions.length - 1; i >= 0; i--) { 
-                s.explosions[i].radius += 3;  // Steady expansion
+                // Dynamic expansion: Fast at start (high alpha), slow at end (low alpha)
+                // This simulates air resistance
+                const expansionSpeed = 1 + (s.explosions[i].alpha * 10); 
+                s.explosions[i].radius += expansionSpeed;  
+                
                 s.explosions[i].alpha -= 0.011; // 1.5s duration
                 if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1); 
             }
-            // ------------------------------
+            // ------------------------------------------------------
 
             if (s.food.length < 400) { for (let k = 0; k < 10; k++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); } }
             activeEntities.forEach((p) => { if (p.country === "golden_maple" && p.maplePhase === "harvest") { s.food.forEach((f) => { if (distSq(p, f) < (5 * CELL)**2) f.isGolden = true; }); } });
@@ -1528,10 +1531,8 @@
                 // --- NEW: RENDER THE NUKE VISUAL (SCALED & PULSING) ---
                 if (m.type === "bosnian_nuke") {
                      const pulse = (Date.now() % 500) / 500;
-                     // SIZE IS NOW PROPORTIONAL TO PLAYER SIZE WHEN DROPPED
                      const baseSize = m.dropSize || 30;
                      const size = baseSize * (0.9 + pulse * 0.2);
-                     
                      ctx.fillStyle = pulse > 0.5 ? "red" : "#FFD700";
                      ctx.beginPath(); ctx.arc(m.x, m.y, size, 0, TWO_PI); ctx.fill();
                      if (m.fuseEnd) {
@@ -1541,7 +1542,6 @@
                          ctx.textAlign = "center";
                          ctx.fillText(left + "s", m.x, m.y - size - 10);
                      }
-                     // Show blast radius
                      ctx.strokeStyle = "rgba(255, 0, 0, 0.3)"; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(m.x, m.y, m.maxRadius, 0, TWO_PI); ctx.stroke();
                      return;
                 }
@@ -1567,26 +1567,58 @@
                 if(p.name && zoom > 0.3) { ctx.fillStyle = "white"; ctx.font = `bold ${Math.max(12, r)}px Arial`; ctx.textAlign = "center"; ctx.fillText(p.name, p.x, p.y - r - 10); }
             });
 
-            // --- HIGH GRAPHICS EXPLOSION RENDERING ---
+            // --- HIGH GRAPHICS JAGGED EXPLOSION RENDERER (Updated) ---
             gameData.explosions.forEach((ex) => { 
-                // Radial Gradient for Fire Effect
-                const gradient = ctx.createRadialGradient(ex.x, ex.y, 0, ex.x, ex.y, ex.radius);
-                gradient.addColorStop(0, `rgba(255, 255, 200, ${ex.alpha})`); // White hot center
-                gradient.addColorStop(0.3, `rgba(255, 165, 0, ${ex.alpha})`); // Orange body
-                gradient.addColorStop(0.7, `rgba(255, 0, 0, ${ex.alpha * 0.8})`); // Red edge
-                gradient.addColorStop(1, `rgba(50, 0, 0, 0)`); // Dark fade out
-
-                ctx.fillStyle = gradient;
-                ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius, 0, TWO_PI); ctx.fill(); 
+                const life = ex.alpha; // 1.0 down to 0
+                const r = ex.radius;
                 
-                // Shockwave Ring
-                if (ex.radius > 50) {
-                    ctx.strokeStyle = `rgba(255, 200, 50, ${ex.alpha * 0.5})`;
-                    ctx.lineWidth = 10;
-                    ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.radius * 0.9, 0, TWO_PI); ctx.stroke();
+                // OUTER LAYER (Smoke/Fire) - Lasts longer, expands slower later
+                // Color Logic: Fire (Yellow/Orange) -> Dark Smoke (Gray/Black)
+                let outerCol;
+                if (life > 0.5) outerCol = `rgba(255, ${Math.floor(100 + 155 * (life - 0.5) * 2)}, 0, ${life})`; // Orange -> Yellow
+                else outerCol = `rgba(${Math.floor(100 * life * 2)}, ${Math.floor(100 * life * 2)}, ${Math.floor(100 * life * 2)}, ${life})`; // Grey Fade
+
+                // Draw Jagged Cloud Shape (Outer)
+                const spikes = 20;
+                ctx.beginPath();
+                for (let i = 0; i <= spikes * 2; i++) {
+                    const angle = (Math.PI * 2 * i) / (spikes * 2);
+                    const noise = Math.sin(angle * 7 + ex.x * 0.1) * Math.cos(angle * 5 + ex.y * 0.1);
+                    const r_mod = r * (0.9 + 0.1 * noise);
+                    const px = ex.x + Math.cos(angle) * r_mod;
+                    const py = ex.y + Math.sin(angle) * r_mod;
+                    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fillStyle = outerCol;
+                ctx.fill();
+
+                // INNER CORE (Super Bright) - Disappears faster (life < 0.4 is gone)
+                if (life > 0.4) {
+                    const coreLife = (life - 0.4) / 0.6; // Normalized 0 to 1 for the core phase
+                    const coreR = r * 0.6; // Core is smaller
+                    ctx.fillStyle = `rgba(255, 255, ${Math.floor(200 + 55 * coreLife)}, ${coreLife})`;
+                    ctx.beginPath();
+                    // Make core slightly jagged too
+                    for (let i = 0; i <= spikes * 2; i++) {
+                        const angle = (Math.PI * 2 * i) / (spikes * 2);
+                        const noise = Math.sin(angle * 3 + ex.x) * Math.cos(angle * 2 + ex.y);
+                        const r_mod = coreR * (0.8 + 0.2 * noise);
+                        const px = ex.x + Math.cos(angle) * r_mod;
+                        const py = ex.y + Math.sin(angle) * r_mod;
+                        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                    }
+                    ctx.fill();
+                }
+
+                // SHOCKWAVE - Only at the start
+                if (life > 0.8) {
+                    ctx.strokeStyle = `rgba(255, 255, 200, ${(life - 0.8) * 5})`;
+                    ctx.lineWidth = 5;
+                    ctx.beginPath(); ctx.arc(ex.x, ex.y, r * 1.2, 0, TWO_PI); ctx.stroke();
                 }
             });
-            // -----------------------------------------
+            // ---------------------------------------------------------
             
             for(let i = floatingTexts.length - 1; i >= 0; i--) {
                 let ft = floatingTexts[i]; ft.y += ft.dy; ft.life -= 0.02;
