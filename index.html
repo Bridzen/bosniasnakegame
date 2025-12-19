@@ -1,4 +1,4 @@
-```html
+``html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -732,17 +732,20 @@
             croatia: { 
                 type: 'dumb', skin: 'croatia', color: '#CC0000', chance: 0.30,
                 nppv: 0.2, // Prediction Time (0.1 - 0.2s)
-                weights: { food: 5, collision: 3, space: 1, boost: 2, mine: 0.5, enemy: 1, wall: 2 } 
+                weights: { food: 5, collision: 3, space: 1, boost: 2, mine: 0.5, enemy: 1, wall: 2 },
+                startLenMin: 200, startLenVar: 200 
             },
             serbia: { 
                 type: 'standard', skin: 'serbia', color: '#C6363C', chance: 0.60,
                 nppv: 0.8, // Prediction Time (0.5 - 0.8s)
-                weights: { food: 8, collision: 7, space: 5, boost: 5, mine: 3, enemy: 4, wall: 5 }
+                weights: { food: 8, collision: 7, space: 5, boost: 5, mine: 3, enemy: 4, wall: 5 },
+                startLenMin: 350, startLenVar: 400
             },
             russia: { 
                 type: 'smart', skin: 'russia', color: '#FFFFFF', chance: 0.10,
                 nppv: 1.5, // Prediction Time (0.8 - 1.5s)
-                weights: { food: 10, collision: 15, space: 12, boost: 7, mine: 6, enemy: 10, escape: 8, wall: 6 }
+                weights: { food: 10, collision: 15, space: 12, boost: 7, mine: 6, enemy: 10, escape: 8, wall: 6 },
+                startLenMin: 600, startLenVar: 900 // Massive Start
             }
         };
 
@@ -1164,8 +1167,14 @@
 
             const cfg = AI_TYPES[personality];
 
-            const startLen = 140 + Math.random() * 50; 
-            const startWidth = 14;
+            // IMPROVED: Spawn with much higher length to prevent "stub" look
+            const startLen = cfg.startLenMin + Math.random() * cfg.startLenVar;
+            const startWidth = 14; // Default starting width
+            
+            // Adjust width growth slightly if they spawn massive (like Russia)
+            let baseScaleVal = startWidth;
+            if (personality === 'russia') baseScaleVal += 5;
+
             const speed = (2.5 + Math.random()) * 1.1; 
             const turn = personality === 'russia' ? 0.12 : (personality === 'croatia' ? 0.30 : 0.08);
 
@@ -1191,18 +1200,18 @@
                 angle: Math.random() * Math.PI * 2, 
                 body: [], 
                 length: startLen, 
-                width: startWidth, 
-                baseScale: startWidth, 
+                width: baseScaleVal, 
+                baseScale: baseScaleVal, 
                 speed: speed, 
-                boostSpeed: speed * 1.5, 
+                boostSpeed: speed * 1.6, // Higher burst
                 turnSpeed: turn, 
                 alive: true, 
                 color: cfg.color, 
                 country: cfg.skin, 
                 frozenUntil: 0,
                 // AI Specific internal state
-                currentState: 'wander',
-                lastDecisionTime: 0
+                aggressionMode: false,
+                dashCooldown: 0
             });
         }
 
@@ -1346,17 +1355,14 @@
             p.body.unshift({ x: p.x, y: p.y }); while (p.body.length > p.length) p.body.pop();
         }
 
-        // --- UPDATED AI SYSTEM (NATIONAL PERSONALITIES) ---
+        // --- UPDATED AI SYSTEM (NATIONAL PERSONALITIES WITH STRATEGY) ---
         function updateAI() {
             const state = gameData;
             const now = Date.now();
-            const AGGRO_RADIUS = 1500;
             
             // Helper to predict a point in the future
             const predict = (ent, timeInSec) => {
-                // Approximate speed based on boosting logic would be better, but basic speed is fine
                 const spd = ent.sprint ? (ent.speed * 1.5) : ent.speed; 
-                // speed is units/frame (approx 16ms), convert timeInSec to frames
                 const frames = timeInSec * 60;
                 return {
                     x: ent.x + Math.cos(ent.angle) * spd * frames,
@@ -1368,86 +1374,76 @@
                 if (!enemy.alive) return;
                 if (enemy.frozenUntil && now < enemy.frozenUntil) return;
                 
-                // --- UPDATE PHYSICAL PROPERTIES ---
-                if (!enemy.baseScale) enemy.baseScale = 12;
-                const calculatedWidth = 12 + (enemy.length - 140) / 4; 
-                if (calculatedWidth > enemy.baseScale) enemy.baseScale = calculatedWidth;
-                enemy.width = enemy.baseScale;
+                // PASSIVE REGENERATION: PREVENT STUBBINESS
+                // Every frame add a tiny bit of length so they can afford to dash without shrinking forever
+                enemy.length += 0.05; 
+                // Ratio control: Ensure width doesn't outpace length logic
+                enemy.width = 12 + (enemy.length - 200) / 20; 
+                if (enemy.width < 12) enemy.width = 12;
                 
                 // Syrup Debuffs
                 let aiSpeedMult = 1.0;
                 state.syrupZones.forEach((zone) => { if (distSq(enemy, zone) < zone.radius**2) aiSpeedMult = 0.4; });
 
-                // --- PREPARE INPUTS FOR DECISION ---
                 const weights = enemy.weights;
                 const lookAheadTime = enemy.nppv; 
+                let wantToDash = false;
+                
+                // Cooldown logic for dashing to make it intermittent/strategic
+                if(enemy.dashCooldown > 0) enemy.dashCooldown--;
 
-                // 1. DUMB AI (CROATIA) BEHAVIOR: Purely Reactive or Random
-                // - Only avoids walls if VERY close.
-                // - Only avoids collisions if touching.
-                // - Head mostly empty logic.
+                // 1. DUMB AI (CROATIA) - Remains erratic
                 if (enemy.aiType === 'dumb') {
-                     // Wall Check (Panic Turn)
+                     // Panic Turn at edges
                      if (Math.abs(enemy.x) > WORLD_SIZE/2 - 200 || Math.abs(enemy.y) > WORLD_SIZE/2 - 200) {
                         const angleToCenter = Math.atan2(-enemy.y, -enemy.x);
                         let diff = normalizeAngle(angleToCenter - enemy.angle);
-                        enemy.angle += (diff > 0 ? 0.3 : -0.3); // Panic turn
+                        enemy.angle += (diff > 0 ? 0.3 : -0.3); 
                      } 
                      else {
-                        // Dumb seeking (nearest food)
+                        // Dumb seeking (nearest food only)
                         let closestFood = null; 
                         let minDist = Infinity;
-                        
-                        // Limit food search radius so they wander aimlessly more often
-                        const viewRadius = 600; 
-
                         for (let f of state.food) {
                             const d = distSq(enemy, f);
-                            if (d < viewRadius**2 && d < minDist) {
-                                minDist = d;
-                                closestFood = f;
-                            }
+                            if (d < 700**2 && d < minDist) { minDist = d; closestFood = f; }
                         }
 
                         if (closestFood) {
                              const targetA = Math.atan2(closestFood.y - enemy.y, closestFood.x - enemy.x);
                              let diff = normalizeAngle(targetA - enemy.angle);
                              enemy.angle += (diff > 0 ? enemy.turnSpeed : -enemy.turnSpeed); 
+                             
+                             // DUMB DASH: Random chance if close to food or random burst
+                             if(minDist < 400**2 && Math.random() < 0.05) wantToDash = true;
                         } else {
-                            // Wiggle random
-                            enemy.angle += (Math.random() - 0.5) * 0.2;
+                            enemy.angle += (Math.random() - 0.5) * 0.2; // Wander
                         }
                      }
+                     if(Math.random() < 0.01) wantToDash = true; // Random burst
                 }
                 
-                // 2. STANDARD (SERBIA) & SMART (RUSSIA) BEHAVIOR: RAYCAST SCORING
+                // 2. STANDARD (SERBIA) & SMART (RUSSIA) - Raycast & Strategy
                 else {
-                    // Decide state based on Smart vs Standard capabilities
                     const searchRadius = enemy.aiType === 'smart' ? 2500 : 1200; 
                     let bestAngle = enemy.angle;
                     let maxScore = -Infinity;
                     
-                    // Angles to evaluate: current, +small, -small, +med, -med, +large, -large
-                    const count = enemy.aiType === 'smart' ? 9 : 5; // More brain power = more angles checked
-                    const step = Math.PI / (enemy.aiType === 'smart' ? 4 : 2); 
+                    const count = enemy.aiType === 'smart' ? 9 : 5; 
                     
-                    // Identify threats/food beforehand to save loop cycles
                     const threats = [];
-                    const foodTargets = [];
-                    
-                    // Prediction of own head based on NPPV
-                    const predictedHead = predict(enemy, lookAheadTime); 
-
-                    // Get Threats (Bodies of players/enemies, mines)
+                    // Populate threats
                     [...state.players, ...state.enemies].forEach(e => {
                         if (e !== enemy && e.alive !== false && !e.dead) {
-                            // Check Distance to see if relevant
                             if (distSq(enemy, e) < searchRadius**2) {
-                                // Add body segments as obstacles
                                 for(let i=0; i < e.body.length; i+=5) threats.push({type: 'body', obj: e.body[i]});
-                                // Add projected head position as High Danger obstacle
                                 if (enemy.aiType === 'smart' || enemy.aiType === 'standard') {
                                     threats.push({type: 'head_predict', obj: predict(e, lookAheadTime), r: e.scale + 100}); 
+                                }
+                                // Russia Logic: Target Identification
+                                if(enemy.aiType === 'smart' && e.scale < enemy.width) {
+                                    // Treat smaller snakes as 'food' if close
+                                    threats.push({type: 'target_weak', obj: e, dist: distSq(enemy, e)});
                                 }
                             }
                         }
@@ -1457,80 +1453,54 @@
                         if(distSq(enemy, m) < searchRadius**2) threats.push({type: 'mine', obj: m});
                     });
 
-                    // Evaluate angles
                     for (let i = 0; i < count; i++) {
-                        // center indices: 0, 1, -1, 2, -2...
-                        let idx = Math.ceil(i/2) * (i%2===0 ? 1 : -1); 
-                        if (i===0) idx = 0;
-                        
+                        let idx = Math.ceil(i/2) * (i%2===0 ? 1 : -1); if (i===0) idx = 0;
                         const testAngle = normalizeAngle(enemy.angle + (idx * 0.25)); 
                         let score = 0;
+                        const vx = Math.cos(testAngle); const vy = Math.sin(testAngle);
                         
-                        // Vector for this angle
-                        const vx = Math.cos(testAngle);
-                        const vy = Math.sin(testAngle);
-                        
-                        // Lookahead point for walls/bounds
-                        const pLook = {
-                            x: enemy.x + vx * 600, 
-                            y: enemy.y + vy * 600
-                        };
+                        // Wall Penalty
+                        const pLook = { x: enemy.x + vx * 600, y: enemy.y + vy * 600 };
+                        if (Math.abs(pLook.x) > WORLD_SIZE/2 || Math.abs(pLook.y) > WORLD_SIZE/2) score -= 800 * weights.wall; 
 
-                        // 1. WALL AVOIDANCE (High Weight)
-                        if (Math.abs(pLook.x) > WORLD_SIZE/2 || Math.abs(pLook.y) > WORLD_SIZE/2) {
-                            score -= 500 * weights.wall; 
-                        }
-
-                        // 2. COLLISION AVOIDANCE
-                        // Project a few points along the path (Smart AI checks further)
+                        // Threat Scanning
                         const steps = enemy.aiType === 'smart' ? 5 : 3;
                         const distStep = 200; 
                         let pathBlocked = false;
 
                         for(let s=1; s<=steps; s++) {
                              const ck = {x: enemy.x + vx * s * distStep, y: enemy.y + vy * s * distStep};
-                             // Check threats against this point
                              for (let t of threats) {
+                                 // RUSSIA: Bonus for moving towards weak targets
+                                 if (t.type === 'target_weak') {
+                                    const d = distSq(ck, t.obj);
+                                    if(d < 400**2) score += 200; // Baiting/chasing bonus
+                                    continue;
+                                 }
+
                                  let safeDist = 100 + enemy.width; 
                                  if (t.type === 'head_predict') safeDist = t.r + enemy.width;
                                  if (t.type === 'mine') safeDist = 300; 
 
                                  if (distSq(ck, t.obj) < safeDist**2) {
-                                     const severity = (steps - s + 1); // Closer = Worse
-                                     if(t.type === 'head_predict') score -= 200 * severity * weights.collision;
-                                     else if(t.type === 'mine') score -= 100 * severity * weights.mine;
-                                     else score -= 100 * severity * weights.collision; 
-                                     
+                                     const severity = (steps - s + 1); 
+                                     score -= 200 * severity * weights.collision;
                                      pathBlocked = true;
+                                     // Immediate Danger Trigger
+                                     if (s <= 2) enemy.highDanger = true; 
                                  }
                              }
                              if(pathBlocked) break;
                         }
 
-                        // 3. FOOD ATTRACTION
-                        // Check dot product to nearest few food items
-                        let localFoodScore = 0;
-                        let foundFood = 0;
+                        // Food Scoring
                         for(let f of state.food) {
-                            if(foundFood > 5) break; 
-                            if(distSq(enemy, f) < 800**2) { // 800px range
-                                const dx = f.x - enemy.x;
-                                const dy = f.y - enemy.y;
+                            if(distSq(enemy, f) < 800**2) {
+                                const dx = f.x - enemy.x; const dy = f.y - enemy.y;
                                 const mag = Math.sqrt(dx*dx + dy*dy);
                                 const dot = (vx * (dx/mag)) + (vy * (dy/mag));
-                                if(dot > 0.5) { // Roughly facing food
-                                    localFoodScore += dot * (f.level||1) * 20; 
-                                    foundFood++;
-                                }
+                                if(dot > 0.7) score += dot * (f.level||1) * 30 * weights.food; 
                             }
-                        }
-                        score += localFoodScore * weights.food;
-
-                        // 4. SMART AI ONLY: Aggression / Escape
-                        if (enemy.aiType === 'smart') {
-                            // If larger than nearest enemy head, bias towards it
-                            // Finding targets... logic omitted for speed, simplistic 'kill opportunity'
-                            // space bias: 
                         }
 
                         if (score > maxScore) {
@@ -1538,63 +1508,94 @@
                             bestAngle = testAngle;
                         }
                     }
-                    
-                    // Smooth turn to best angle
+
+                    // Turn Smoothly
                     let diff = normalizeAngle(bestAngle - enemy.angle);
                     if (Math.abs(diff) < enemy.turnSpeed) enemy.angle = bestAngle; 
                     else enemy.angle += (diff > 0 ? enemy.turnSpeed : -enemy.turnSpeed); 
+
+                    // --- STRATEGIC DASH LOGIC ---
+                    if (enemy.dashCooldown <= 0 && enemy.length > 250) {
+                        
+                        // Scenario 1: Escape High Danger
+                        if (enemy.highDanger) {
+                            wantToDash = true;
+                            enemy.dashCooldown = 30; // 0.5s cooldown
+                            enemy.highDanger = false;
+                        }
+
+                        // Scenario 2: Serbia (Secure Food)
+                        else if (enemy.aiType === 'standard') {
+                            // Find food right in front
+                            for(let f of state.food) {
+                                const d = distSq(enemy, f);
+                                if(d < 400**2) { // Close to food
+                                    const ang = Math.atan2(f.y - enemy.y, f.x - enemy.x);
+                                    if(Math.abs(normalizeAngle(ang - enemy.angle)) < 0.2) {
+                                        wantToDash = true; 
+                                        enemy.dashCooldown = 15;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Scenario 3: Russia (Aggression / Traverse)
+                        else if (enemy.aiType === 'smart') {
+                             // Check for Weak Targets to Kill
+                             const nearWeak = threats.find(t => t.type === 'target_weak' && t.dist < 800**2);
+                             if (nearWeak) {
+                                 // Angle check
+                                 const ang = Math.atan2(nearWeak.obj.y - enemy.y, nearWeak.obj.x - enemy.x);
+                                 if (Math.abs(normalizeAngle(ang - enemy.angle)) < 0.5) {
+                                     wantToDash = true; // Aggressive Dash
+                                     enemy.dashCooldown = 10;
+                                 }
+                             } else {
+                                 // No immediate threats, dash through empty space to cover ground
+                                 if (Math.random() < 0.05) wantToDash = true;
+                             }
+                        }
+                    }
                 }
 
                 enemy.angle = normalizeAngle(enemy.angle);
 
-                // --- SPRINT LOGIC ---
-                // Simple logic for standard/dumb: random sprint. 
-                // Smart: sprint if valid path and chasing food/kill or escaping
-                let shouldSprint = false;
-                if (enemy.length > MIN_LENGTH + 20) {
-                     if (enemy.aiType === 'dumb' && Math.random() < 0.02) shouldSprint = true;
-                     else if (enemy.aiType === 'smart' && dist(enemy, {x:0,y:0}) < WORLD_SIZE/3) shouldSprint = true; 
-                }
-                // Don't burn all mass
-                if (enemy.length < 150) shouldSprint = false;
-
                 let spd = enemy.speed * aiSpeedMult;
-                if (shouldSprint) { spd = enemy.boostSpeed * aiSpeedMult; enemy.length -= SPRINT_COST; }
+                
+                // Final Check on Sprint affordability
+                if (wantToDash && enemy.length > MIN_LENGTH + 50) { 
+                    spd = enemy.boostSpeed * aiSpeedMult; 
+                    enemy.length -= SPRINT_COST * 0.5; // Reduced cost for bots so they stay long
+                }
 
                 enemy.x += Math.cos(enemy.angle) * spd; 
                 enemy.y += Math.sin(enemy.angle) * spd;
 
-                // --- WORLD BOUNDS DEATH ---
+                // --- WORLD BOUNDS ---
                 if(Math.abs(enemy.x) > WORLD_SIZE/2 || Math.abs(enemy.y) > WORLD_SIZE/2) { 
-                    killEnemy(enemy, null); 
-                    return; 
+                    killEnemy(enemy, null); return; 
                 }
 
-                // Update Body
                 enemy.body.unshift({ x: enemy.x, y: enemy.y }); 
                 while (enemy.body.length > enemy.length) enemy.body.pop();
 
-                // Check Food Collision
+                // Eat Food
                 for (let i = state.food.length - 1; i >= 0; i--) { 
                     if (coll(enemy, state.food[i], enemy.width + 10)) { 
                         state.food.splice(i, 1); 
-                        enemy.length += 8; 
+                        // Enhanced length gain for bots to maintain size
+                        enemy.length += 15; 
                         enemy.baseScale = Math.min(500, enemy.baseScale + 0.25); 
                     } 
                 }
 
-                // Check Entity Collision (Killing other bots)
+                // Hit Others
                 state.enemies.forEach(other => { 
                     if(other !== enemy && other.alive) { 
-                        for(let b of other.body) { 
-                            if(coll(enemy, b, enemy.width + other.width - 5)) { 
-                                killEnemy(enemy, other); 
-                            } 
-                        } 
+                        for(let b of other.body) if(coll(enemy, b, enemy.width + other.width - 5)) killEnemy(enemy, other); 
                     } 
                 });
-                
-                // Killing Players
                 state.players.forEach((p) => { 
                     if (!p.dead && p.active && p.napoleonPhase !== 'exiled') { 
                         if (coll(p, enemy, p.scale + enemy.width)) killPlayer(p, null); 
