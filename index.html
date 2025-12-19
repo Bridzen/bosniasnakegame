@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: Aggressive AI Update</title>
+    <title>Bosnia Snake: Kamikaze Update</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -1123,13 +1123,51 @@
             if (spawnBots && gameData.mode !== "server") { for (let i = 0; i < MAX_ENEMIES; i++) spawnOneEnemy(); }
         }
 
+        // --- SPAWN ONE ENEMY: NOW WITH KAMIKAZE 5% ROLL ---
         function spawnOneEnemy() {
-            const startLen = 140 + Math.random() * 100; const startWidth = 14;
-            const player = gameData.players[0]; let isCroatia = false; if (player && player.scale > 100 && Math.random() < 0.08) { isCroatia = true; }
-            const personality = isCroatia ? 'pure_aggro' : 'balanced';
-            const speed = isCroatia ? 22.0 : (2.5 + Math.random()) * 1.1; 
-            const turn = isCroatia ? 0.20 : 0.08;
-            gameData.enemies.push({ x: randPosCell(), y: randPosCell(), angle: Math.random() * Math.PI * 2, body: [], length: startLen, width: startWidth, baseScale: startWidth, speed: speed, boostSpeed: speed, turnSpeed: turn, alive: true, color: isCroatia ? "#CC0000" : "#C6363C", country: isCroatia ? "croatia" : "serbia", frozenUntil: 0, personality: personality });
+            // Check max size of any player to unlock Kamikaze
+            let maxPlayerScale = 0;
+            if(gameData.players) maxPlayerScale = Math.max(...gameData.players.map(p => p.scale || 18));
+            
+            const canSpawnKamikaze = maxPlayerScale >= 100;
+            const isKamikaze = canSpawnKamikaze && Math.random() < 0.05;
+
+            const startLen = 140 + Math.random() * 100; 
+            const startWidth = 14;
+            
+            // Stats
+            const speed = isKamikaze ? 25.0 : (2.5 + Math.random()) * 1.1; 
+            const turn = isKamikaze ? 0.30 : 0.08;
+            
+            // Appearance
+            let country = SKINS_NORMAL[Math.floor(Math.random() * SKINS_NORMAL.length)];
+            let color = "#fff";
+            
+            if (isKamikaze) {
+                country = "croatia"; // Reuse aggressive looking skin or assign specific
+                color = "#8B0000";   // Dark Red Body
+            } else if (maxPlayerScale > 100 && Math.random() < 0.08) {
+                // "Croatia Aggro" legacy behavior kept for flavor
+                country = "croatia";
+            }
+
+            gameData.enemies.push({ 
+                type: isKamikaze ? 'kamikaze' : 'normal',
+                x: randPosCell(), 
+                y: randPosCell(), 
+                angle: Math.random() * Math.PI * 2, 
+                body: [], 
+                length: startLen, 
+                width: startWidth, 
+                baseScale: startWidth, 
+                speed: speed, 
+                boostSpeed: speed * (isKamikaze ? 1.0 : 1.5), 
+                turnSpeed: turn, 
+                alive: true, 
+                color: color, 
+                country: country, 
+                frozenUntil: 0
+            });
         }
 
         function getLocalInput() {
@@ -1234,7 +1272,7 @@
             p.body.unshift({ x: p.x, y: p.y }); while (p.body.length > p.length) p.body.pop();
         }
 
-        // --- UPDATED AI LOGIC: FIXING CIRCLES & AGGRESSION ---
+        // --- NEW: AI UPDATE LOGIC (TARGET POINT SYSTEM) ---
         function updateAI() {
             const state = gameData;
             const now = Date.now();
@@ -1259,66 +1297,138 @@
                     }
                 });
 
-                // --- 1. WANDER TARGET SYSTEM (Linear Motion) ---
-                // Reset target if too close (400px to avoid orbiting)
-                if (!enemy.targetX || dist(enemy, {x: enemy.targetX, y: enemy.targetY}) < 400) {
-                    enemy.targetX = randPosCell();
-                    enemy.targetY = randPosCell();
-                }
-
-                // Vector towards Wander Target
-                let finalX = enemy.targetX - enemy.x;
-                let finalY = enemy.targetY - enemy.y;
-                
-                // --- VITAL FIX: FORWARD BIAS ---
-                // Add current velocity to prevent stopping/spinning
-                finalX += Math.cos(enemy.angle) * 500; 
-                finalY += Math.sin(enemy.angle) * 500;
-
+                let finalX = 0; 
+                let finalY = 0;
                 let forceSprint = false;
 
-                // --- 2. PLAYER INTERACTION (Hunt / Flee) ---
-                state.players.forEach(p => { 
-                    if(!p.dead) { 
-                        const d = dist(enemy, p);
-                        if (d < AGGRO_RADIUS) {
-                            if (enemy.width > p.scale) {
-                                // HUNT: Override Wander completely
-                                finalX = (p.x - enemy.x) * 2.5; // Increased hunt strength
-                                finalY = (p.y - enemy.y) * 2.5;
-                                if (d < 600) forceSprint = true; // Sprint for kill
-                            } else if (p.scale > enemy.width * 1.3 && d < 600) {
-                                // FLEE: Only if player is >30% bigger AND close (600px)
-                                const push = 500000 / (d + 1); 
-                                finalX -= (p.x - enemy.x) * push; 
-                                finalY -= (p.y - enemy.y) * push; 
-                                forceSprint = true;
-                            }
-                            // Otherwise (close size), do nothing special (fight/ignore)
+                // -----------------------------
+                // CASE 1: KAMIKAZE AI
+                // -----------------------------
+                if (enemy.type === 'kamikaze') {
+                    // Find largest player > 100
+                    let target = null;
+                    let bestDist = Infinity;
+                    state.players.forEach(p => {
+                        if (!p.dead && p.scale >= 100) {
+                            const d = dist(enemy, p);
+                            if (d < bestDist) { bestDist = d; target = p; }
                         }
-                        // Avoid Bodies (Critical)
-                        for(let i=0; i < p.body.length; i+=3) { 
-                            const b = p.body[i]; 
+                    });
+
+                    // Fallback to closest if no giant found
+                    if (!target && bestDist === Infinity) {
+                         state.players.forEach(p => {
+                            if(!p.dead) {
+                                const d = dist(enemy, p);
+                                if(d < bestDist) { bestDist = d; target = p; }
+                            }
+                         });
+                    }
+
+                    if (target) {
+                        // Vector 1: ATTACK HEAD DIRECTLY
+                        finalX += (target.x - enemy.x) * 10.0;
+                        finalY += (target.y - enemy.y) * 10.0;
+
+                        // Vector 2: AVOID BODY PARTS (Don't crash into tail while targeting head)
+                        // This allows them to weave through the snake to get the kill
+                        for(let i=0; i < target.body.length; i+=2) { 
+                            const b = target.body[i]; 
                             const bd = dist(enemy, b); 
-                            if(bd < 400) { 
-                                const push = 50000 / (bd + 1); 
+                            // Only repel if very close
+                            if(bd < 300) { 
+                                const push = 30000 / (bd + 1); 
                                 finalX -= (b.x - enemy.x) * push; 
                                 finalY -= (b.y - enemy.y) * push; 
                             } 
+                        }
+                        
+                        forceSprint = true; // Kamikazes always sprint
+                    } else {
+                        // Just run forward if no players found
+                        finalX = Math.cos(enemy.angle) * 500;
+                        finalY = Math.sin(enemy.angle) * 500;
+                    }
+                } 
+                // -----------------------------
+                // CASE 2: NORMAL AI
+                // -----------------------------
+                else {
+                    // --- 1. WANDER TARGET SYSTEM (Linear Motion) ---
+                    if (!enemy.targetX || dist(enemy, {x: enemy.targetX, y: enemy.targetY}) < 400) {
+                        enemy.targetX = randPosCell();
+                        enemy.targetY = randPosCell();
+                    }
+
+                    finalX = enemy.targetX - enemy.x;
+                    finalY = enemy.targetY - enemy.y;
+                    
+                    const wanderMag = Math.sqrt(finalX*finalX + finalY*finalY) || 1;
+                    finalX = (finalX / wanderMag) * 300; 
+                    finalY = (finalY / wanderMag) * 300;
+                    
+                    // FORWARD BIAS to prevent stalling
+                    finalX += Math.cos(enemy.angle) * 500; 
+                    finalY += Math.sin(enemy.angle) * 500;
+
+                    // --- 2. PLAYER INTERACTION (Hunt / Flee) ---
+                    state.players.forEach(p => { 
+                        if(!p.dead) { 
+                            const d = dist(enemy, p);
+                            if (d < AGGRO_RADIUS) {
+                                if (enemy.width > p.scale) {
+                                    // HUNT
+                                    finalX = (p.x - enemy.x) * 2.5; 
+                                    finalY = (p.y - enemy.y) * 2.5;
+                                    if (d < 600) forceSprint = true; 
+                                } else if (p.scale > enemy.width * 1.3 && d < 600) {
+                                    // FLEE (Only if opponent much bigger)
+                                    const push = 500000 / (d + 1); 
+                                    finalX -= (p.x - enemy.x) * push; 
+                                    finalY -= (p.y - enemy.y) * push; 
+                                    forceSprint = true;
+                                }
+                            }
+                            // Avoid Bodies
+                            for(let i=0; i < p.body.length; i+=3) { 
+                                const b = p.body[i]; 
+                                const bd = dist(enemy, b); 
+                                if(bd < 400) { 
+                                    const push = 50000 / (bd + 1); 
+                                    finalX -= (b.x - enemy.x) * push; 
+                                    finalY -= (b.y - enemy.y) * push; 
+                                } 
+                            } 
                         } 
-                    } 
-                });
+                    });
 
-                // --- 3. OBSTACLE AVOIDANCE ---
-                // Push away from walls
-                const distFromCenter = dist(enemy, {x:0, y:0});
-                const mapEdge = WORLD_SIZE / 2;
-                if (distFromCenter > mapEdge - 400) {
-                    finalX -= enemy.x * 5.0; 
-                    finalY -= enemy.y * 5.0;
-                }
+                    // --- 3. OBSTACLE AVOIDANCE ---
+                    const distFromCenter = dist(enemy, {x:0, y:0});
+                    const mapEdge = WORLD_SIZE / 2;
+                    if (distFromCenter > mapEdge - 400) {
+                        finalX -= enemy.x * 5.0; 
+                        finalY -= enemy.y * 5.0;
+                    }
 
-                // Avoid Mines
+                    // Seek Food
+                    if (!forceSprint) {
+                        let closestFood = null; 
+                        let minFoodDist = 500; 
+                        state.food.forEach((f) => { 
+                            const d = dist(enemy, f); 
+                            if (d < minFoodDist) { 
+                                minFoodDist = d; 
+                                closestFood = f; 
+                            } 
+                        }); 
+                        if(closestFood) { 
+                            finalX += (closestFood.x - enemy.x) * 0.8; 
+                            finalY += (closestFood.y - enemy.y) * 0.8; 
+                        }
+                    }
+                } // End AI Type Logic
+
+                // Avoid Mines (Universal)
                 state.mines.forEach(m => { 
                     const d = dist(enemy, m); 
                     if(d < 400) { 
@@ -1327,23 +1437,6 @@
                         finalY -= (m.y - enemy.y) * push; 
                     } 
                 });
-
-                // Seek Food
-                if (!forceSprint) {
-                    let closestFood = null; 
-                    let minFoodDist = 500; 
-                    state.food.forEach((f) => { 
-                        const d = dist(enemy, f); 
-                        if (d < minFoodDist) { 
-                            minFoodDist = d; 
-                            closestFood = f; 
-                        } 
-                    }); 
-                    if(closestFood) { 
-                        finalX += (closestFood.x - enemy.x) * 0.8; 
-                        finalY += (closestFood.y - enemy.y) * 0.8; 
-                    }
-                }
 
                 // --- 4. EXECUTE MOVEMENT ---
                 const targetAngle = Math.atan2(finalY, finalX); 
@@ -1381,13 +1474,15 @@
                 enemy.body.unshift({ x: enemy.x, y: enemy.y }); 
                 while (enemy.body.length > enemy.length) enemy.body.pop();
 
-                // Eat Food
-                for (let i = state.food.length - 1; i >= 0; i--) { 
-                    if (coll(enemy, state.food[i], enemy.width + 10)) { 
-                        state.food.splice(i, 1); 
-                        enemy.length += 5; 
-                        enemy.baseScale = Math.min(200, enemy.baseScale + 0.15); 
-                    } 
+                // Eat Food (Normals Only)
+                if (enemy.type !== 'kamikaze') {
+                    for (let i = state.food.length - 1; i >= 0; i--) { 
+                        if (coll(enemy, state.food[i], enemy.width + 10)) { 
+                            state.food.splice(i, 1); 
+                            enemy.length += 5; 
+                            enemy.baseScale = Math.min(200, enemy.baseScale + 0.15); 
+                        } 
+                    }
                 }
 
                 // Collisions (Other Snakes)
@@ -1950,3 +2045,4 @@
     </script>
 </body>
 </html>
+```
