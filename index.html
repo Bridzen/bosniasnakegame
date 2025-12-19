@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1238,11 +1239,6 @@
                 }
                 // Toggle OFF
                 else if (inp.triggerAbility && p.napoleonPhase === 'exiled' && p.abilityActive) {
-                    // Debounce a bit so single press doesn't toggle immediately off
-                    // Simple check: require key release or delay? Let's add a small delay to activation time.
-                    // For now, assume a toggle requires a new press which is handled by 'inp.triggerAbility' usually being one frame.
-                    // But 'keys' holds state. Let's rely on standard cooldown logic for toggle.
-                    // Actually, let's just use a short delay before you can exit.
                     if(!p.exileStartTime) p.exileStartTime = now;
                     if(now - p.exileStartTime > 1000) {
                         p.napoleonPhase = null;
@@ -1255,8 +1251,6 @@
 
                 if (p.napoleonPhase === 'exiled') {
                     // POCKET DIMENSION PHYSICS
-                    // Ignore main world collisions logic below.
-                    // Just handle movement relative to nothing (island).
                     
                     if (inp.targetAngle !== null) { 
                         let d = normalizeAngle(inp.targetAngle - p.angle); 
@@ -1265,13 +1259,7 @@
                         p.angle = normalizeAngle(p.angle); 
                     }
                     
-                    // Constrain to Island Size (Scale * 15)
                     const islandRadius = p.scale * 15;
-                    // We assume island center is where they activated ability (or relative 0,0 for local rendering).
-                    // To keep it simple, we just don't move them in WORLD coordinates much, or we update them but don't check collisions.
-                    // Let's allow movement but clamp to a radius around where they entered? 
-                    // Better: Update X/Y normally, but if distance from anchor > radius, stop.
-                    // Anchor needs to be stored.
                     if (!p.exileAnchor) p.exileAnchor = {x: p.x, y: p.y};
                     
                     let s = BASE_SPEED;
@@ -1285,7 +1273,6 @@
                         p.y = nextY;
                     }
 
-                    // Body follow
                     p.body.unshift({ x: p.x, y: p.y }); while (p.body.length > p.length) p.body.pop();
                     
                     return; // SKIP STANDARD PHYSICS
@@ -1311,7 +1298,6 @@
                 }
             });
 
-            // ... (Soviet / Maple / Bosnian Logic remains same) ...
             if (p.country === "soviet") {
                 if (inp.sprint && !p.barrageActive && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000)) { p.barrageActive = true; p.barrageEndTime = now + 2000; p.nextExplosionTime = now; p.abilityActive = true; }
                 if (p.barrageActive) {
@@ -1346,7 +1332,6 @@
             p.body.unshift({ x: p.x, y: p.y }); while (p.body.length > p.length) p.body.pop();
         }
 
-        // ... [AI Update Code remains same] ...
         function updateAI() {
             const state = gameData;
             const now = Date.now();
@@ -1582,34 +1567,28 @@
                 if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1); 
             }
 
-            // Regular Food Spawn
             if (s.food.length < 400) { for (let k = 0; k < 10; k++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); } }
             activeEntities.forEach((p) => { if (p.country === "golden_maple" && p.maplePhase === "harvest") { s.food.forEach((f) => { if (distSq(p, f) < (5 * CELL)**2) f.isGolden = true; }); } });
             
             // --- NAPOLEON POCKET DIMENSION FOOD ---
-            // Only runs if a player is in the dimension (Client Side mostly, but simulated here for Single Player)
             const napoleonPlayer = gameData.players.find(p => p.napoleonPhase === 'exiled');
             if(napoleonPlayer) {
-                if(now - lastPocketSpawn > 1000) {
+                if(now - lastPocketSpawn > 5000) { // CHANGED TO 5000
                     lastPocketSpawn = now;
-                    // Spawn a Blue Orb near the player's anchor
                     const angle = Math.random() * TWO_PI;
-                    const r = Math.random() * (napoleonPlayer.scale * 15 - 50); // Inside island
+                    const r = Math.random() * (napoleonPlayer.scale * 15 - 50); 
                     const ox = (napoleonPlayer.exileAnchor ? napoleonPlayer.exileAnchor.x : napoleonPlayer.x) + Math.cos(angle) * r;
                     const oy = (napoleonPlayer.exileAnchor ? napoleonPlayer.exileAnchor.y : napoleonPlayer.y) + Math.sin(angle) * r;
                     pocketFood.push({x: ox, y: oy});
                 }
                 
-                // Eat Pocket Food
                 for(let i = pocketFood.length - 1; i >= 0; i--) {
                     if(distSq(napoleonPlayer, pocketFood[i]) < (napoleonPlayer.scale + 20)**2) {
                         pocketFood.splice(i, 1);
                         playSound("eat");
-                        // 1.5x size of normal food (Normal food gives LENGTH_GAIN + SIZE_GAIN)
-                        // This gives raw scale boost more effectively
-                        napoleonPlayer.length += LENGTH_GAIN * 1.5;
-                        napoleonPlayer.scale += SIZE_GAIN_PER_LEVEL * 1.5;
-                        gainXP(10);
+                        napoleonPlayer.length += 40; // CHANGED
+                        napoleonPlayer.scale += 1.5; // CHANGED
+                        gainXP(50);
                     }
                 }
             }
@@ -1708,7 +1687,7 @@
             if (victim.id === 0 && cheats.godMode) return; 
             
             victim.dead = true; victim.deaths++; victim.abilityActive = false; victim.maplePhase = null; victim.kingdomPhase = null; victim.napoleonPhase = null;
-            victim.currentKillStreak = 0; // Reset streak on death
+            victim.currentKillStreak = 0; 
 
             if (victim.id === currentState.myPlayerIndex) { updateStats({ death: true, scale: victim.scale, length: victim.length }); submitScoreToLeaderboard(victim.scale); toggleUI('death'); }
             if (killer) { 
@@ -1744,7 +1723,6 @@
             for (let i = 0; i < e.body.length; i += stepSize) { const point = e.body[i]; if(point) gameData.food.push({ x: point.x + (Math.random() - 0.5) * 20, y: point.y + (Math.random() - 0.5) * 20, level: Math.floor(Math.random() * 3) + 1 }); }
         }
 
-        // ... [Compress State Function - Update if needed for Napoleon phase syncing] ...
         function compressState(state) {
             return {
                 mode: state.mode, shakeIntensity: Math.round(state.shakeIntensity),
@@ -1837,16 +1815,10 @@
                 }
             } else { abInd.style.display = 'none'; }
 
-            // --- RENDER LOGIC ---
-            // Special Background for Napoleon Exile
             if (me.napoleonPhase === 'exiled') {
-                ctx.fillStyle = "#e0c090"; // Sandy/Island Color
+                ctx.fillStyle = "#e0c090"; 
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                // Draw water pattern
-                ctx.fillStyle = "#4FA4F4"; // Water
-                // We will render island as a circle in the center of screen (since we move relative to anchor)
-                // Actually, let's keep camera centered on player
+                ctx.fillStyle = "#4FA4F4"; 
             } else {
                 ctx.fillStyle = "#080b12"; ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.strokeStyle = "rgba(0, 47, 108, 0.2)"; ctx.lineWidth = 1; for (let i = 0; i < canvas.width; i += 50) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); } for (let j = 0; j < canvas.height; j += 50) { ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(canvas.width, j); ctx.stroke(); }
@@ -1859,36 +1831,31 @@
             const startScale = 18; const zoom = Math.max(0.1, 0.6 * (30 / (30 + ((focus.scale || 18) - startScale) * 0.4)));
             ctx.scale(zoom, zoom); ctx.translate(-focus.x, -focus.y);
             
-            // If Exiled, draw island relative to anchor
             if (me.napoleonPhase === 'exiled') {
                 const anchor = me.exileAnchor || {x: me.x, y: me.y};
                 const r = me.scale * 15;
-                ctx.fillStyle = "#e0c090"; // Sand
+                ctx.fillStyle = "#e0c090"; 
                 ctx.beginPath(); ctx.arc(anchor.x, anchor.y, r, 0, TWO_PI); ctx.fill();
                 ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 10; ctx.stroke();
                 
-                // Draw Ocean around
                 ctx.save();
                 ctx.beginPath();
                 ctx.rect(anchor.x - r*2, anchor.y - r*2, r*4, r*4);
-                ctx.arc(anchor.x, anchor.y, r, 0, TWO_PI, true); // Cut out hole
+                ctx.arc(anchor.x, anchor.y, r, 0, TWO_PI, true); 
                 ctx.clip();
                 ctx.fillStyle = "#4FA4F4";
                 ctx.fillRect(anchor.x - r*2, anchor.y - r*2, r*4, r*4);
                 ctx.restore();
 
-                // Draw Blue Orbs
                 pocketFood.forEach(f => {
                     ctx.shadowBlur = 10; ctx.shadowColor = "cyan";
                     ctx.fillStyle = "cyan"; ctx.beginPath(); ctx.arc(f.x, f.y, 25, 0, TWO_PI); ctx.fill();
                     ctx.shadowBlur = 0;
                 });
                 
-                // Only draw self in this mode (and maybe chat bubbles)
                 drawPlayer(me, zoom);
                 
             } else {
-                // NORMAL WORLD RENDERING
                 const vw = canvas.width / zoom; const vh = canvas.height / zoom;
                 const viewLeft = focus.x - vw/2 - 1000; const viewRight = focus.x + vw/2 + 1000;
                 const viewTop = focus.y - vh/2 - 1000; const viewBottom = focus.y + vh/2 + 1000;
@@ -1934,7 +1901,6 @@
                 const allEntities = [...gameData.players, ...gameData.enemies];
                 allEntities.forEach((p) => {
                     if (p.dead || p.alive === false) return;
-                    // Don't render exiled players in normal world
                     if (p.napoleonPhase === 'exiled') return; 
                     if (p.x < viewLeft - p.length && p.x > viewRight + p.length && p.y < viewTop - p.length && p.y > viewBottom + p.length) return; 
                     drawPlayer(p, zoom);
@@ -2019,33 +1985,26 @@
                 ctx.strokeStyle = "#D4AF37"; ctx.lineWidth = r * 0.1; ctx.strokeRect(-r, -r, r*2, r*2);
             }
 
-            // --- NAPOLEONIC FRANCE FLAG ---
             else if (country === 'napoleonic_france') {
-                // Vertical Tricolor
-                rect(-r, -r, (r * 2) / 3, r * 2, "#0055A4"); // Blue
-                rect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2, "#FFFFFF"); // White
-                rect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2, "#EF4135"); // Red
+                rect(-r, -r, (r * 2) / 3, r * 2, "#0055A4"); 
+                rect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2, "#FFFFFF"); 
+                rect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2, "#EF4135"); 
                 
-                // Gold Fleur-de-lis pattern on Blue and Red
                 ctx.fillStyle = "#FFD700";
                 const patternSize = r / 3;
                 for(let py = -r; py < r; py += patternSize*1.5) {
-                    // Left Blue
                     ctx.beginPath(); ctx.arc(-r + r/3, py, 2, 0, TWO_PI); ctx.fill(); 
-                    // Right Red
                     ctx.beginPath(); ctx.arc(r - r/3, py + patternSize/2, 2, 0, TWO_PI); ctx.fill();
                 }
 
-                // Imperial Eagle (Simplified Gold shape in center)
                 ctx.fillStyle = "#DAA520";
                 ctx.beginPath();
-                ctx.moveTo(0, -r*0.4); // Head
-                ctx.lineTo(r*0.25, -r*0.1); // Wing R
-                ctx.lineTo(r*0.1, r*0.3); // Leg R
-                ctx.lineTo(-r*0.1, r*0.3); // Leg L
-                ctx.lineTo(-r*0.25, -r*0.1); // Wing L
+                ctx.moveTo(0, -r*0.4); 
+                ctx.lineTo(r*0.25, -r*0.1); 
+                ctx.lineTo(r*0.1, r*0.3); 
+                ctx.lineTo(-r*0.1, r*0.3); 
+                ctx.lineTo(-r*0.25, -r*0.1); 
                 ctx.fill();
-                // Crown above
                 ctx.fillStyle = "#FFD700";
                 ctx.fillRect(-r*0.15, -r*0.6, r*0.3, r*0.15);
             }
@@ -2102,7 +2061,6 @@
             document.getElementById('spectator-label').style.display = currentState.isSpectating ? 'block' : 'none';
         }
 
-        // ... [Rest of UI Functions: renderSkinGrid, submitScoreToLeaderboard, startScanner, etc. remain the same] ...
         function renderSkinGrid() {
             const grid = document.getElementById('skin-grid'); grid.innerHTML = '';
             const list = currentState.skinCategory === 'normal' ? SKINS_NORMAL : SKINS_SPECIAL;
@@ -2202,4 +2160,3 @@
     </script>
 </body>
 </html>
-```
