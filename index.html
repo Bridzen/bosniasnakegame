@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -565,6 +564,7 @@
                 <div class="row"><span>GAMES</span><span id="stat-games" style="color: #FECB00">0</span></div>
                 <div class="row"><span>MAX MINES</span><span id="stat-mines" style="color: #FECB00">0</span></div>
                 <div class="row"><span>MAX LENGTH</span><span id="stat-length" style="color: #FECB00">140</span></div>
+                <div class="row"><span>KILL STREAK</span><span id="stat-streak" style="color: #FECB00">0</span></div>
                 
                 <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid #333;">
                     <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">SECRET CODE</div>
@@ -712,38 +712,38 @@
 
         const OWNER_PASSWORD = "Roblox13_isme";
         const CELL = 150;
-        const GRID = 160; // 2x MAP SIZE (Expanded from 80)
+        const GRID = 160; 
         const WORLD_SIZE = CELL * GRID;
         const MIN_LENGTH = 140;
         const SPRINT_COST = 0.5;
         const BASE_SPEED = 4.2;
         const TURN_SPEED = 0.09;
-        const MAX_ENEMIES = 5; // REDUCED TO 5
+        const MAX_ENEMIES = 5; 
         const SIZE_GAIN_PER_LEVEL = 0.15;
         const FOOD_RADIUS_BASE = 6;
         const LENGTH_GAIN = 8;
         const BROADCAST_RATE = 45;
         const INTERPOLATION_SPEED = 0.35;
-        const TWO_PI = Math.PI * 2; // Cached Math constant for lag reduction
+        const TWO_PI = Math.PI * 2; 
 
         const SKINS_NORMAL = [
             "bosnia", "russia", "germany", "france", "canada", "ukraine", 
             "usa", "uk", "italy", "poland", "sweden", "denmark",
             "spain", "netherlands", "greece", "switzerland", "norway", "finland", "portugal",
-            "turkey", "china" // Added new skins here
+            "turkey", "china" 
         ];
-        const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple", "bosnian_kingdom"];
+        const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple", "bosnian_kingdom", "napoleonic_france"];
 
         const SKIN_BODY_COLORS = {
             bosnia: "#002F6C", russia: "#FFFFFF", germany: "#000000", france: "#0055A4", 
             canada: "#FF0000", ukraine: "#0057B8", ireland: "#169B62", soviet: "#CC0000", 
-            golden_maple: "#DAA520", bosnian_kingdom: "#002395",
+            golden_maple: "#DAA520", bosnian_kingdom: "#002395", napoleonic_france: "#0055A4",
             usa: "#3C3B6E", uk: "#012169", italy: "#008C45", 
             poland: "#DC143C", sweden: "#006AA7", denmark: "#C60C30", serbia: "#C6363C",
             croatia: "#CC0000",
             spain: "#AA151B", netherlands: "#FF8800", greece: "#0D5EAF",
             switzerland: "#FF0000", norway: "#BA0C2F", finland: "#FFFFFF", portugal: "#046A38",
-            turkey: "#E30A17", china: "#DE2910" // Colors for Turkey and China
+            turkey: "#E30A17", china: "#DE2910" 
         };
 
         const UNLOCK_CRITERIA = {
@@ -768,13 +768,14 @@
             finland: { type: "kills", val: 40, label: "Kills 40 (Sniper)" },
             portugal: { type: "length", val: 1143, label: "Length 1143 (Year)" },
 
-            turkey: { type: "level", val: 4, label: "Reach Level 4" }, // LEVEL 4 REWARD
-            china: { type: "level", val: 6, label: "Reach Level 6" },   // LEVEL 6 REWARD
+            turkey: { type: "level", val: 4, label: "Reach Level 4" }, 
+            china: { type: "level", val: 6, label: "Reach Level 6" },   
 
             ireland: { type: "code", label: "Secret Code" },
             soviet: { type: "custom_soviet", label: "Russia + Size 500 + 50 Kills" },
             golden_maple: { type: "custom_maple", label: "Canada + Size 250 + 150 Kills" },
             bosnian_kingdom: { type: "custom_kingdom", label: "Bosnia + Size 271 + 40 Kills + 20 Mines (1 Game)" },
+            napoleonic_france: { type: "custom_napoleon", label: "Level 10 + Size 400 + 5 Kills (1 Life)" }
         };
 
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -835,8 +836,8 @@
         // --- UPDATED STATS FOR PROGRESSION ---
         let userStats = { 
             totalKills: 0, totalDeaths: 0, bestScale: 18, bestLength: 140, 
-            gamesPlayed: 0, maxMinesInGame: 0, unlockedSecrets: [],
-            level: 1, currentXP: 0, xpToNext: 300 // INCREASED STARTING XP TO MAKE IT HARDER
+            gamesPlayed: 0, maxMinesInGame: 0, unlockedSecrets: [], maxKillStreak: 0,
+            level: 1, currentXP: 0, xpToNext: 300 
         };
         try { const loaded = localStorage.getItem('bosnia_snake_stats_v2'); if(loaded) userStats = {...userStats, ...JSON.parse(loaded)}; } catch(e) { console.warn("Failed to load stats"); }
 
@@ -848,7 +849,7 @@
         let hostConn = null;
         let lastSentTime = 0;
         let serverState = null;
-        let heartbeatInterval = null; // Track heartbeat to clear it on unload
+        let heartbeatInterval = null; 
 
         const mouse = { x: 0, y: 0 };
         const keys = {};
@@ -857,6 +858,10 @@
         let floatingTexts = [];
 
         let gameData = { mode: null, players: [], enemies: [], food: [], mines: [], explosions: [], syrupZones: [], shakeIntensity: 0, gameOver: false };
+
+        // NAPOLEON POCKET DIMENSION VARS
+        let pocketFood = []; 
+        let lastPocketSpawn = 0;
 
         function randPosCell() { return Math.floor(Math.random() * GRID) * CELL - WORLD_SIZE / 2; }
         // --- OPTIMIZATION: Distance Squared ---
@@ -876,11 +881,11 @@
             document.getElementById('stat-games').innerText = userStats.gamesPlayed;
             document.getElementById('stat-mines').innerText = userStats.maxMinesInGame || 0;
             document.getElementById('stat-length').innerText = Math.round(userStats.bestLength);
+            document.getElementById('stat-streak').innerText = userStats.maxKillStreak || 0;
         }
 
         // --- NEW XP SYSTEM WITH HARDER LEVELING & REWARDS ---
         function gainXP(amount) {
-            // LEVEL 9 REWARD: +0.1 XP Multiplier (10% Bonus)
             if (userStats.level >= 9) {
                 amount = amount * 1.1;
             }
@@ -889,12 +894,10 @@
             if (userStats.currentXP >= userStats.xpToNext) {
                 userStats.currentXP -= userStats.xpToNext;
                 userStats.level++;
-                // HARDER LEVELING CURVE: Increased multiplier to 1.3 from 1.2
                 userStats.xpToNext = Math.floor(userStats.xpToNext * 1.3);
                 playSound("levelup");
                 addFloatingText(canvas.width/2, canvas.height/2 - 100, `LEVEL UP! ${userStats.level}`, "#00FFFF", 40);
                 
-                // Alert player of rewards
                 if(userStats.level === 4) addFloatingText(canvas.width/2, canvas.height/2, "REWARD: TURKEY SKIN UNLOCKED!", "#E30A17", 30);
                 if(userStats.level === 5) addFloatingText(canvas.width/2, canvas.height/2, "REWARD: SPAWN SIZE +5!", "#00FF00", 30);
                 if(userStats.level === 6) addFloatingText(canvas.width/2, canvas.height/2, "REWARD: CHINA SKIN UNLOCKED!", "#DE2910", 30);
@@ -911,7 +914,6 @@
             document.getElementById('xp-text').innerText = `${Math.floor(userStats.currentXP)} / ${userStats.xpToNext} XP`;
             document.getElementById('level-badge').firstElementChild.innerText = `LEVEL ${userStats.level}`;
             
-            // Show Active Buffs on HUD
             let buffText = "";
             if (userStats.level >= 5) buffText += "+SIZE ";
             if (userStats.level >= 9) buffText += "+XP ";
@@ -930,12 +932,15 @@
             if (userStats.unlockedSecrets.includes("MASTER_UNLOCK")) return true;
             const req = UNLOCK_CRITERIA[skin]; if (!req) return true;
             
-            // Check Level Requirements
             if (req.type === "level") return userStats.level >= req.val;
             
             if (skin === "soviet") return isSkinUnlocked("russia") && userStats.bestScale >= 500 && userStats.totalKills >= 50;
             if (skin === "golden_maple") return isSkinUnlocked("canada") && userStats.bestScale >= 250 && userStats.totalKills >= 150;
             if (skin === "bosnian_kingdom") return isSkinUnlocked("bosnia") && userStats.bestScale >= 271 && userStats.totalKills >= 40 && userStats.maxMinesInGame >= 20;
+            
+            // NAPOLEONIC FRANCE REQ: Level 10, Size 400, 5 kills in one life
+            if (skin === "napoleonic_france") return userStats.level >= 10 && userStats.bestScale >= 400 && userStats.maxKillStreak >= 5;
+
             if (req.type === "default") return true; if (req.type === "code") return userStats.unlockedSecrets.includes(skin);
             if (req.type === "kills") return userStats.totalKills >= req.val; if (req.type === "deaths") return userStats.totalDeaths >= req.val;
             if (req.type === "scale") return userStats.bestScale >= req.val; if (req.type === "length") return userStats.bestLength >= req.val;
@@ -952,6 +957,13 @@
             if (updates.scale && updates.scale > userStats.bestScale) { userStats.bestScale = updates.scale; changed = true; }
             if (updates.length && updates.length > userStats.bestLength) { userStats.bestLength = updates.length; changed = true; }
             if (updates.minesExploded && updates.minesExploded > userStats.maxMinesInGame) { userStats.maxMinesInGame = updates.minesExploded; changed = true; }
+            
+            // New Streak Logic
+            if (updates.streak && updates.streak > userStats.maxKillStreak) {
+                userStats.maxKillStreak = updates.streak;
+                changed = true;
+            }
+
             if (changed) { localStorage.setItem('bosnia_snake_stats_v2', JSON.stringify(userStats)); updateStatsUI(); renderSkinGrid(); }
         }
         
@@ -969,13 +981,12 @@
             }
         }
         
-        // Ensure cleanup runs when tab closes
         window.addEventListener("beforeunload", () => {
            cleanupPreviousSession();
         });
 
         function initSinglePlayer() {
-            cleanupPreviousSession(); // Clean before starting new
+            cleanupPreviousSession(); 
             if (peer) peer.destroy(); peer = new Peer({ debug: 1 });
             peer.on('open', (id) => {
                 currentState.myId = id; currentState.isHost = true; currentState.isDedicatedServer = false; currentState.isSpectating = false; currentState.isPlayingClient = false; currentState.myPlayerIndex = 0; currentState.menu = 'playing';
@@ -987,15 +998,14 @@
                     peer.on('disconnected', () => clearInterval(heartbeatInterval));
                 }
                 updateStats({ game: true });
-                updateHUDXP(); // Initialize XP bar
+                updateHUDXP(); 
                 
-                // LEVEL 5 REWARD CHECK
                 let startScale = 18;
                 if (userStats.level >= 5) startScale += 5;
 
                 gameData.mode = "single";
                 gameData.players = [{
-                    id: 0, active: true, x: 0, y: 0, angle: -Math.PI / 2, body: [], length: 140, dead: false, country: currentState.selectedSkin, colorBody: SKIN_BODY_COLORS[currentState.selectedSkin], scale: startScale, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, minesExplodedCurrentGame: 0, name: currentState.playerName
+                    id: 0, active: true, x: 0, y: 0, angle: -Math.PI / 2, body: [], length: 140, dead: false, country: currentState.selectedSkin, colorBody: SKIN_BODY_COLORS[currentState.selectedSkin], scale: startScale, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, napoleonPhase: null, minesExplodedCurrentGame: 0, name: currentState.playerName, currentKillStreak: 0
                 }];
                 resetWorld(true); toggleUI('playing'); addChatMessage("System", "Welcome to Single Player! Room ID: " + id, "lime");
                 peer.on('connection', (conn) => {
@@ -1007,10 +1017,10 @@
         }
 
         let nextPlayerId = 1;
-        const playerInputs = {}; // Map id -> input state
+        const playerInputs = {}; 
 
         function initAdminServer() {
-            cleanupPreviousSession(); // Clean before starting new
+            cleanupPreviousSession(); 
             if (peer) peer.destroy(); peer = new Peer({ debug: 1 });
             peer.on('open', (id) => {
                 currentState.myId = id; 
@@ -1018,7 +1028,7 @@
                 currentState.isDedicatedServer = true; 
                 currentState.isSpectating = true; 
                 currentState.isPlayingClient = false; 
-                currentState.myPlayerIndex = -1; // No local player to track
+                currentState.myPlayerIndex = -1; 
                 currentState.menu = 'playing';
                 
                 cheats.godMode = true; document.getElementById('cheat-god').innerText = "God Mode: ON (SERVER)";
@@ -1030,7 +1040,7 @@
                     peer.on('disconnected', () => clearInterval(heartbeatInterval));
                 }
                 gameData.mode = "server";
-                gameData.players = []; // No Admin Snake
+                gameData.players = []; 
                 
                 resetWorld(true); 
                 toggleUI('playing'); addChatMessage("System", "HOSTING OFFICIAL SERVER. ID: " + id, "gold");
@@ -1041,9 +1051,8 @@
                         if (data.type === "CHAT") { const msg = { name: data.name, text: data.text, color: "#aaa" }; broadcastChat(msg); }
                         if (data.type === "JOIN") {
                             const newId = nextPlayerId++;
-                            // NOTE: Levels/Rewards not synced to dedicated server yet (simplified)
                             gameData.players.push({
-                                id: newId, active: true, x: randPosCell(), y: randPosCell(), angle: Math.random() * Math.PI * 2, body: [], length: 140, dead: false, country: data.skin || "bosnia", colorBody: SKIN_BODY_COLORS[data.skin] || "#fff", scale: 18, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, minesExplodedCurrentGame: 0, name: data.name || "Player"
+                                id: newId, active: true, x: randPosCell(), y: randPosCell(), angle: Math.random() * Math.PI * 2, body: [], length: 140, dead: false, country: data.skin || "bosnia", colorBody: SKIN_BODY_COLORS[data.skin] || "#fff", scale: 18, kills: 0, deaths: 0, frozenUntil: 0, abilityActive: false, lastAbilityTime: 0, maplePhase: null, kingdomPhase: null, napoleonPhase: null, minesExplodedCurrentGame: 0, name: data.name || "Player", currentKillStreak: 0
                             });
                             conn.playerId = newId;
                             conn.send({ type: "WELCOME", id: newId });
@@ -1051,7 +1060,7 @@
                         if (data.type === "RESPAWN_REQ" && conn.playerId) {
                             const p = gameData.players.find(pl => pl.id === conn.playerId);
                             if (p && p.dead) {
-                                p.dead = false; p.x = randPosCell(); p.y = randPosCell(); p.angle = Math.random() * Math.PI * 2; p.body = []; p.length = 140; p.scale = 18; p.kills = 0; p.deaths++; p.frozenUntil = Date.now() + 2000; p.abilityActive = false; p.lastAbilityTime = 0; p.maplePhase = null; p.kingdomPhase = null;
+                                p.dead = false; p.x = randPosCell(); p.y = randPosCell(); p.angle = Math.random() * Math.PI * 2; p.body = []; p.length = 140; p.scale = 18; p.kills = 0; p.deaths++; p.frozenUntil = Date.now() + 2000; p.abilityActive = false; p.lastAbilityTime = 0; p.maplePhase = null; p.kingdomPhase = null; p.napoleonPhase = null; p.currentKillStreak = 0;
                             }
                         }
                         if (data.type === "INPUT" && conn.playerId) {
@@ -1088,10 +1097,9 @@
              peer.on('open', () => {
                  const conn = peer.connect(idToJoin, { serialization: 'json', reliable: true }); hostConn = conn; currentState.isHost = false; currentState.isSpectating = false; currentState.isPlayingClient = true;
                  conn.on('open', () => { 
-                     // Send Join Request
                      conn.send({ type: "JOIN", name: currentState.playerName, skin: currentState.selectedSkin });
                      currentState.menu = 'playing'; toggleUI('playing'); 
-                     updateHUDXP(); // Init XP bar for client (persists locally)
+                     updateHUDXP(); 
                      addChatMessage("System", "Joining Server...", "cyan"); 
                  });
                  conn.on('data', (data) => {
@@ -1111,21 +1119,18 @@
             for (let i = 0; i < 80; i++) { s.mines.push({ x: randPosCell(), y: randPosCell(), state: "idle", timer: 3.0, lastTick: Date.now() }); }
             s.players.forEach((p) => {
                 p.x = randPosCell(); p.y = randPosCell(); p.body = []; p.length = 140; 
-                // LEVEL 5 REWARD CHECK IN RESPAWN
                 let startScale = 18;
                 if (p.id === currentState.myPlayerIndex && userStats.level >= 5) startScale += 5;
                 p.scale = startScale; 
 
-                p.dead = false; p.frozenUntil = 0; p.abilityActive = false; p.lastAbilityTime = 0; p.maplePhase = null; p.kingdomPhase = null; p.minesExplodedCurrentGame = 0; p.barrageActive = false; p.barrageStartTime = 0; p.nextExplosionTime = 0; p.sovietBoost = false;
+                p.dead = false; p.frozenUntil = 0; p.abilityActive = false; p.lastAbilityTime = 0; p.maplePhase = null; p.kingdomPhase = null; p.napoleonPhase = null; p.minesExplodedCurrentGame = 0; p.barrageActive = false; p.barrageStartTime = 0; p.nextExplosionTime = 0; p.sovietBoost = false; p.currentKillStreak = 0;
                 if (currentState.isDedicatedServer && p.id === 0) { p.scale = 50; p.length = 500; }
             });
             s.enemies = []; 
             if (spawnBots && gameData.mode !== "server") { for (let i = 0; i < MAX_ENEMIES; i++) spawnOneEnemy(); }
         }
 
-        // --- SPAWN ONE ENEMY: UPDATED FOR STRICT SKINS & SPAWN SAFETY ---
         function spawnOneEnemy() {
-            // Check max size of any player to unlock Kamikaze
             let maxPlayerScale = 0;
             if(gameData.players) maxPlayerScale = Math.max(...gameData.players.map(p => p.scale || 18));
             
@@ -1135,11 +1140,9 @@
             const startLen = 140 + Math.random() * 100; 
             const startWidth = 14;
             
-            // Stats
             const speed = isKamikaze ? 25.0 : (2.5 + Math.random()) * 1.1; 
             const turn = isKamikaze ? 0.30 : 0.08;
             
-            // Appearance logic
             let country = "serbia"; 
             let color = "#C6363C"; 
             if (isKamikaze) {
@@ -1147,8 +1150,6 @@
                 color = "#CC0000";   
             } 
 
-            // --- SPAWN SAFETY CHECK ---
-            // Try to find a spot away from players and other bots
             let spawnX, spawnY;
             let safe = false;
             let attempts = 0;
@@ -1157,11 +1158,9 @@
                 spawnY = randPosCell();
                 safe = true;
                 
-                // Check players
                 for(let p of gameData.players) {
                     if(!p.dead && dist({x:spawnX, y:spawnY}, p) < 2000) { safe = false; break; }
                 }
-                // Check enemies
                 if(safe) {
                     for(let e of gameData.enemies) {
                          if(e.alive && dist({x:spawnX, y:spawnY}, e) < 1500) { safe = false; break; }
@@ -1186,7 +1185,6 @@
                 color: color, 
                 country: country, 
                 frozenUntil: 0,
-                // --- ANTI-CAMPING TRACKING ---
                 campAnchor: {x: spawnX, y: spawnY},
                 campStart: Date.now(),
                 forcedMoveUntil: 0,
@@ -1225,7 +1223,79 @@
         }
 
         function handlePhysics(p, inp) {
-            const now = Date.now(); if (p.frozenUntil > now) return;
+            const now = Date.now(); 
+            
+            // --- NAPOLEON ABILITY LOGIC START ---
+            if (p.country === "napoleonic_france") {
+                const cooldown = 70000; // 70 seconds
+                // Toggle ON
+                if (inp.triggerAbility && p.napoleonPhase !== 'exiled' && (!p.lastAbilityTime || now - p.lastAbilityTime > cooldown)) {
+                    p.napoleonPhase = 'exiled';
+                    p.abilityActive = true;
+                    addFloatingText(p.x, p.y, "THERE IS NOTHING WE CAN DO.", "#ffffff", 20);
+                    // Clear pocket food when entering
+                    if (p.id === 0) pocketFood = [];
+                }
+                // Toggle OFF
+                else if (inp.triggerAbility && p.napoleonPhase === 'exiled' && p.abilityActive) {
+                    // Debounce a bit so single press doesn't toggle immediately off
+                    // Simple check: require key release or delay? Let's add a small delay to activation time.
+                    // For now, assume a toggle requires a new press which is handled by 'inp.triggerAbility' usually being one frame.
+                    // But 'keys' holds state. Let's rely on standard cooldown logic for toggle.
+                    // Actually, let's just use a short delay before you can exit.
+                    if(!p.exileStartTime) p.exileStartTime = now;
+                    if(now - p.exileStartTime > 1000) {
+                        p.napoleonPhase = null;
+                        p.abilityActive = false;
+                        p.lastAbilityTime = now;
+                        p.exileStartTime = 0;
+                        addFloatingText(p.x, p.y, "RETURNED FROM EXILE", "#ffffff", 20);
+                    }
+                }
+
+                if (p.napoleonPhase === 'exiled') {
+                    // POCKET DIMENSION PHYSICS
+                    // Ignore main world collisions logic below.
+                    // Just handle movement relative to nothing (island).
+                    
+                    if (inp.targetAngle !== null) { 
+                        let d = normalizeAngle(inp.targetAngle - p.angle); 
+                        if (Math.abs(d) < TURN_SPEED) p.angle = inp.targetAngle; 
+                        else p.angle += d > 0 ? TURN_SPEED : -TURN_SPEED; 
+                        p.angle = normalizeAngle(p.angle); 
+                    }
+                    
+                    // Constrain to Island Size (Scale * 15)
+                    const islandRadius = p.scale * 15;
+                    // We assume island center is where they activated ability (or relative 0,0 for local rendering).
+                    // To keep it simple, we just don't move them in WORLD coordinates much, or we update them but don't check collisions.
+                    // Let's allow movement but clamp to a radius around where they entered? 
+                    // Better: Update X/Y normally, but if distance from anchor > radius, stop.
+                    // Anchor needs to be stored.
+                    if (!p.exileAnchor) p.exileAnchor = {x: p.x, y: p.y};
+                    
+                    let s = BASE_SPEED;
+                    if (inp.sprint && p.length > MIN_LENGTH) { s *= 1.8; p.length -= SPRINT_COST; }
+                    
+                    let nextX = p.x + Math.cos(p.angle) * s;
+                    let nextY = p.y + Math.sin(p.angle) * s;
+                    
+                    if (dist({x:nextX, y:nextY}, p.exileAnchor) < islandRadius) {
+                        p.x = nextX;
+                        p.y = nextY;
+                    }
+
+                    // Body follow
+                    p.body.unshift({ x: p.x, y: p.y }); while (p.body.length > p.length) p.body.pop();
+                    
+                    return; // SKIP STANDARD PHYSICS
+                } else {
+                    p.exileAnchor = null; // Reset anchor when not exiled
+                }
+            }
+            // --- NAPOLEON ABILITY LOGIC END ---
+
+            if (p.frozenUntil > now) return;
 
             gameData.enemies.forEach(e => {
                 if(e.alive) {
@@ -1235,12 +1305,13 @@
             });
 
             gameData.players.forEach(other => {
-                if(other.id !== p.id && !other.dead) {
+                if(other.id !== p.id && !other.dead && other.napoleonPhase !== 'exiled') {
                     if (distSq(p, other) < (p.scale + other.scale)**2) killPlayer(p, other);
                     for(let i=0; i<other.body.length; i+=3) { if(coll(p, other.body[i], p.scale + other.scale - 5)) { killPlayer(p, other); return; } }
                 }
             });
 
+            // ... (Soviet / Maple / Bosnian Logic remains same) ...
             if (p.country === "soviet") {
                 if (inp.sprint && !p.barrageActive && (!p.lastAbilityTime || now - p.lastAbilityTime > 60000)) { p.barrageActive = true; p.barrageEndTime = now + 2000; p.nextExplosionTime = now; p.abilityActive = true; }
                 if (p.barrageActive) {
@@ -1253,31 +1324,10 @@
             } else if (p.country === "bosnian_kingdom") {
                 const cooldown = 30000;
                 if (inp.triggerAbility && (!p.lastAbilityTime || now - p.lastAbilityTime > cooldown)) {
-                    p.kingdomPhase = "active"; 
-                    p.phaseEndTime = now + 1000; 
-                    p.lastAbilityTime = now; 
-                    playSound("soviet_boom");
-                    
-                    // --- NEW LOGIC: SINGLE BIG BOMB (Updated) ---
-                    // Fuse Calculation: Size 100 = 2 sec.
-                    // Multiplier changed to 0.02 (20ms per size unit)
+                    p.kingdomPhase = "active"; p.phaseEndTime = now + 1000; p.lastAbilityTime = now; playSound("soviet_boom");
                     const fuseMs = Math.max(1000, p.scale * 20); 
-                    
-                    // Explosion Radius: Proportional to size
                     const blastRadius = p.scale * 8;
-
-                    gameData.mines.push({ 
-                        x: p.x, 
-                        y: p.y, 
-                        state: "kingdom_fuse", // New state for this bomb
-                        type: "bosnian_nuke", 
-                        ownerId: p.id,
-                        dropSize: p.scale, // Store current head size for rendering
-                        fuseEnd: now + fuseMs,
-                        maxRadius: blastRadius,
-                        lastTick: now 
-                    });
-
+                    gameData.mines.push({ x: p.x, y: p.y, state: "kingdom_fuse", type: "bosnian_nuke", ownerId: p.id, dropSize: p.scale, fuseEnd: now + fuseMs, maxRadius: blastRadius, lastTick: now });
                     addFloatingText(p.x, p.y, `BOMB! ${(fuseMs/1000).toFixed(1)}s`, "#FFD700", 25);
                 }
                 if (p.kingdomPhase === "active" && now > p.phaseEndTime) p.kingdomPhase = null;
@@ -1296,22 +1346,20 @@
             p.body.unshift({ x: p.x, y: p.y }); while (p.body.length > p.length) p.body.pop();
         }
 
-        // --- NEW: AI UPDATE LOGIC (TARGET POINT SYSTEM) ---
+        // ... [AI Update Code remains same] ...
         function updateAI() {
             const state = gameData;
             const now = Date.now();
-            const AGGRO_RADIUS = 900; // REDUCED from 1500 for better survivability
+            const AGGRO_RADIUS = 900; 
 
             state.enemies.forEach((enemy) => {
                 if (!enemy.alive) return;
                 if (enemy.frozenUntil && now < enemy.frozenUntil) return;
 
-                // --- ANTI-CAMPING CHECK ---
                 if (!enemy.campAnchor) { enemy.campAnchor = {x: enemy.x, y: enemy.y}; enemy.campStart = now; }
                 const CAMP_RADIUS_SQ = 450 * 450; 
                 const CAMP_TIME = 3000; 
 
-                // *** EXCEPTION: Kamikaze Snakes are unaffected by camping rule ***
                 if (enemy.type !== 'kamikaze') {
                     if (distSq(enemy, enemy.campAnchor) > CAMP_RADIUS_SQ) {
                         enemy.campAnchor = {x: enemy.x, y: enemy.y};
@@ -1323,7 +1371,6 @@
                     }
                 }
 
-                // --- 1. UNLIMITED GROWTH LOGIC ---
                 if (!enemy.baseScale) enemy.baseScale = 12;
                 const currentCalculatedWidth = 12 + (enemy.length - 140) / 4; 
                 if (currentCalculatedWidth > enemy.baseScale) enemy.baseScale = currentCalculatedWidth;
@@ -1342,28 +1389,19 @@
                 let finalY = 0;
                 let forceSprint = false;
 
-                // --- CHECK IF FORCED MOVEMENT IS ACTIVE ---
                 if (now < enemy.forcedMoveUntil) {
                     finalX = Math.cos(enemy.forcedAngle) * 1000;
                     finalY = Math.sin(enemy.forcedAngle) * 1000;
                     forceSprint = true; 
                 } 
                 else {
-                    // --- TARGET PRIORITY LOGIC ---
-                    // Priority 1: PLAYER (if nearby)
-                    // Priority 2: OTHER ENEMY (Cannibalism)
-                    // Priority 3: FOOD CLUMPS / HIGH LEVEL FOOD
-
                     let target = null;
                     let targetType = 'none';
                     let bestDist = Infinity;
 
-                    // 1. Scan Players
                     state.players.forEach(p => {
-                        if (!p.dead) {
+                        if (!p.dead && p.napoleonPhase !== 'exiled') {
                             const d = dist(enemy, p);
-                            // Avoid huge players logic handled later, this is for AGGRO
-                            // Only aggro if safe size diff or kamikaze
                             if (d < AGGRO_RADIUS && d < bestDist) {
                                 bestDist = d;
                                 target = p;
@@ -1372,7 +1410,6 @@
                         }
                     });
 
-                    // 2. Scan Enemies (If no player found)
                     if (!target) {
                         state.enemies.forEach(other => {
                             if (other !== enemy && other.alive) {
@@ -1386,17 +1423,12 @@
                         });
                     }
 
-                    // --- EXECUTE TARGETING BEHAVIOR ---
                     if (target) {
-                        // HUNT MODE
                         finalX += (target.x - enemy.x) * 3.5;
                         finalY += (target.y - enemy.y) * 3.5;
-
-                        // Smart Avoidance of Tail while hunting
                         for(let i=0; i < target.body.length; i+=3) { 
                             const b = target.body[i]; 
                             const bd = dist(enemy, b); 
-                            // Stronger repulsion to avoid crashing
                             if(bd < 400) { 
                                 const push = 60000 / (bd + 1); 
                                 finalX -= (b.x - enemy.x) * push; 
@@ -1404,11 +1436,7 @@
                             } 
                         }
                         forceSprint = true; 
-
                     } else {
-                        // NO TARGET -> WANDER / EAT FOOD (Priority 3)
-                        
-                        // Wander Target
                         if (!enemy.targetX || dist(enemy, {x: enemy.targetX, y: enemy.targetY}) < 400) {
                             enemy.targetX = randPosCell();
                             enemy.targetY = randPosCell();
@@ -1422,19 +1450,13 @@
                         finalX += Math.cos(enemy.angle) * 500; 
                         finalY += Math.sin(enemy.angle) * 500;
 
-                        // Seek Food (Smart Scan for High Level/Clumps)
                         let bestFood = null; 
                         let maxFoodScore = -Infinity; 
-                        
                         state.food.forEach((f) => { 
                             const d = dist(enemy, f); 
-                            if(d < 800) { // Only look nearby
-                                // Score based on level (clump) and distance
+                            if(d < 800) { 
                                 const val = (f.level || 1) * 100 - d; 
-                                if(val > maxFoodScore) {
-                                    maxFoodScore = val;
-                                    bestFood = f;
-                                }
+                                if(val > maxFoodScore) { maxFoodScore = val; bestFood = f; }
                             }
                         }); 
                         if(bestFood) { 
@@ -1443,8 +1465,6 @@
                         }
                     }
 
-                    // --- UNIVERSAL AVOIDANCE (Walls/Mines/Players) ---
-                    // Wall Avoidance
                     const distFromCenter = dist(enemy, {x:0, y:0});
                     const mapEdge = WORLD_SIZE / 2;
                     if (distFromCenter > mapEdge - 500) {
@@ -1452,7 +1472,6 @@
                         finalY -= enemy.y * 6.0;
                     }
 
-                    // Mine Avoidance
                     state.mines.forEach(m => { 
                         const d = dist(enemy, m); 
                         if(d < 500) { 
@@ -1462,24 +1481,15 @@
                         } 
                     });
 
-                    // --- BIG PLAYER AVOIDANCE FIX ---
-                    // Calculates distance to BODY EDGE, not center.
                     state.players.forEach(p => { 
-                        if (!p.dead && p !== target) { 
-                            // Center distance
+                        if (!p.dead && p !== target && p.napoleonPhase !== 'exiled') { 
                             const d = dist(enemy, p);
-                            // Edge distance (approx)
                             const edgeDist = d - p.scale - enemy.width;
-                            
-                            // If close to edge, PUSH HARD
                             if (edgeDist < 600) { 
-                                // Exponential push based on edge proximity
                                 const push = 1000000 / (Math.max(1, edgeDist)); 
                                 finalX -= (p.x - enemy.x) * push; 
                                 finalY -= (p.y - enemy.y) * push; 
                             }
-                            
-                            // Also avoid body parts
                             for (let j = 0; j < p.body.length; j += 4) {
                                 const bd = dist(enemy, p.body[j]);
                                 const bEdgeDist = bd - p.scale - enemy.width;
@@ -1492,7 +1502,6 @@
                         } 
                     });
 
-                    // Avoid other enemies generally
                     state.enemies.forEach(other => { 
                         if(other !== enemy && other.alive && other !== target) { 
                              if (distSq(enemy, other) < 40000) { 
@@ -1502,9 +1511,8 @@
                             }
                         } 
                     });
-                } // End logic
+                } 
 
-                // --- 4. EXECUTE MOVEMENT ---
                 const targetAngle = Math.atan2(finalY, finalX); 
                 let diff = normalizeAngle(targetAngle - enemy.angle);
                 
@@ -1528,27 +1536,22 @@
                 enemy.x += Math.cos(enemy.angle) * spd; 
                 enemy.y += Math.sin(enemy.angle) * spd;
 
-                // Border Kill Check
                 if(Math.abs(enemy.x) > WORLD_SIZE/2 || Math.abs(enemy.y) > WORLD_SIZE/2) { 
                     killEnemy(enemy, null); 
                     return; 
                 }
 
-                // Update Body
                 enemy.body.unshift({ x: enemy.x, y: enemy.y }); 
                 while (enemy.body.length > enemy.length) enemy.body.pop();
 
-                // Eat Food (Boosted Growth for AI)
                 for (let i = state.food.length - 1; i >= 0; i--) { 
                     if (coll(enemy, state.food[i], enemy.width + 10)) { 
                         state.food.splice(i, 1); 
-                        // INCREASED GROWTH RATE FOR BOTS
                         enemy.length += 8; 
                         enemy.baseScale = Math.min(500, enemy.baseScale + 0.25); 
                     } 
                 }
 
-                // Collisions
                 state.enemies.forEach(other => { 
                     if(other !== enemy && other.alive) { 
                         for(let b of other.body) { 
@@ -1559,7 +1562,7 @@
                     } 
                 });
                 state.players.forEach((p) => { 
-                    if (!p.dead && p.active) { 
+                    if (!p.dead && p.active && p.napoleonPhase !== 'exiled') { 
                         if (coll(p, enemy, p.scale + enemy.width)) killPlayer(p, null); 
                         for (let j = 0; j < p.body.length; j += 2) 
                             if (coll(enemy, p.body[j], enemy.width + p.scale)) killEnemy(enemy, p); 
@@ -1567,44 +1570,64 @@
                 });
             });
         }
-        // -----------------------------------------------------------
 
         function updateEnvironment(activeEntities) {
             const s = gameData; const now = Date.now();
             for (let i = s.syrupZones.length - 1; i >= 0; i--) { if (now > s.syrupZones[i].expiresAt) s.syrupZones.splice(i, 1); }
             
-            // --- UPDATED EXPLOSION LOGIC (Non-Linear Expansion) ---
             for (let i = s.explosions.length - 1; i >= 0; i--) { 
-                // Dynamic expansion: Fast at start (high alpha), slow at end (low alpha)
-                // This simulates air resistance
                 const expansionSpeed = 1 + (s.explosions[i].alpha * 10); 
                 s.explosions[i].radius += expansionSpeed;  
-                
-                s.explosions[i].alpha -= 0.011; // 1.5s duration
+                s.explosions[i].alpha -= 0.011; 
                 if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1); 
             }
-            // ------------------------------------------------------
 
+            // Regular Food Spawn
             if (s.food.length < 400) { for (let k = 0; k < 10; k++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); } }
             activeEntities.forEach((p) => { if (p.country === "golden_maple" && p.maplePhase === "harvest") { s.food.forEach((f) => { if (distSq(p, f) < (5 * CELL)**2) f.isGolden = true; }); } });
             
+            // --- NAPOLEON POCKET DIMENSION FOOD ---
+            // Only runs if a player is in the dimension (Client Side mostly, but simulated here for Single Player)
+            const napoleonPlayer = gameData.players.find(p => p.napoleonPhase === 'exiled');
+            if(napoleonPlayer) {
+                if(now - lastPocketSpawn > 1000) {
+                    lastPocketSpawn = now;
+                    // Spawn a Blue Orb near the player's anchor
+                    const angle = Math.random() * TWO_PI;
+                    const r = Math.random() * (napoleonPlayer.scale * 15 - 50); // Inside island
+                    const ox = (napoleonPlayer.exileAnchor ? napoleonPlayer.exileAnchor.x : napoleonPlayer.x) + Math.cos(angle) * r;
+                    const oy = (napoleonPlayer.exileAnchor ? napoleonPlayer.exileAnchor.y : napoleonPlayer.y) + Math.sin(angle) * r;
+                    pocketFood.push({x: ox, y: oy});
+                }
+                
+                // Eat Pocket Food
+                for(let i = pocketFood.length - 1; i >= 0; i--) {
+                    if(distSq(napoleonPlayer, pocketFood[i]) < (napoleonPlayer.scale + 20)**2) {
+                        pocketFood.splice(i, 1);
+                        playSound("eat");
+                        // 1.5x size of normal food (Normal food gives LENGTH_GAIN + SIZE_GAIN)
+                        // This gives raw scale boost more effectively
+                        napoleonPlayer.length += LENGTH_GAIN * 1.5;
+                        napoleonPlayer.scale += SIZE_GAIN_PER_LEVEL * 1.5;
+                        gainXP(10);
+                    }
+                }
+            }
+
             s.food.forEach((f, i) => { 
                 const foodLevel = f.level || 1; const rad = FOOD_RADIUS_BASE + foodLevel * 1.5; 
                 activeEntities.forEach((p) => { 
-                    if (!p.dead && coll(p, f, p.scale + rad)) { 
+                    if (!p.dead && p.napoleonPhase !== 'exiled' && coll(p, f, p.scale + rad)) { 
                         if (p.id === currentState.myPlayerIndex) { 
                             playSound("eat"); 
                             gainXP(foodLevel * 2); 
                         } 
                         s.food.splice(i, 1); 
                         const multiplier = f.isGolden ? 3 : 1; 
-                        
-                        // LEVEL 10 REWARD: +20% Food Growth
                         let growthMult = 1.0;
                         if (p.id === currentState.myPlayerIndex && userStats.level >= 10) {
                             growthMult = 1.2;
                         }
-
                         p.length += LENGTH_GAIN * multiplier * growthMult; 
                         p.scale = Math.min(2000, p.scale + (foodLevel * SIZE_GAIN_PER_LEVEL * multiplier * growthMult)); 
                     } 
@@ -1613,17 +1636,12 @@
 
             for (let i = s.mines.length - 1; i >= 0; i--) {
                 let m = s.mines[i]; 
-
-                // --- NEW: BOSNIAN NUKE LOGIC (Updated) ---
                 if (m.type === "bosnian_nuke" && m.state === "kingdom_fuse") {
-                    // Check if fuse time is up
                     if (now >= m.fuseEnd) {
                         createExplosion(m.x, m.y, m.maxRadius);
                         activeEntities.forEach((p) => { 
-                            if (!p.dead) { 
-                                // Owner is immune to their own nuke (optional)
+                            if (!p.dead && p.napoleonPhase !== 'exiled') { 
                                 if (p.id === m.ownerId) return; 
-                                
                                 if (distSq(p, m) < m.maxRadius * m.maxRadius) { 
                                     if(p.id !== undefined) killPlayer(p, null); 
                                     else killEnemy(p, null); 
@@ -1632,9 +1650,8 @@
                         }); 
                         s.mines.splice(i, 1);
                     }
-                    continue; // Skip standard mine logic for the nuke
+                    continue; 
                 }
-                // -------------------------------
 
                 const isBosnian = m.type === "bosnian"; 
                 const triggerRadius = 200; 
@@ -1645,7 +1662,7 @@
                     let triggered = false; 
                     let triggerer = null; 
                     activeEntities.forEach((p) => { 
-                        if (!p.dead) { 
+                        if (!p.dead && p.napoleonPhase !== 'exiled') { 
                             if (isBosnian && p.id === m.ownerId) return; 
                             if (distSq(p, m) < triggerRadius * triggerRadius) { 
                                 triggered = true; 
@@ -1666,7 +1683,7 @@
                     if (now - m.lastTick > delay) { 
                         createExplosion(m.x, m.y, isBosnian ? 200 : 10); 
                         activeEntities.forEach((p) => { 
-                            if (!p.dead) { 
+                            if (!p.dead && p.napoleonPhase !== 'exiled') { 
                                 if (isBosnian && p.id === m.ownerId) return; 
                                 if (distSq(p, m) < explodeRadius * explodeRadius) { 
                                     if(p.id !== undefined) killPlayer(p, null); 
@@ -1690,14 +1707,19 @@
             if (victim.dead) return;
             if (victim.id === 0 && cheats.godMode) return; 
             
-            victim.dead = true; victim.deaths++; victim.abilityActive = false; victim.maplePhase = null; victim.kingdomPhase = null;
+            victim.dead = true; victim.deaths++; victim.abilityActive = false; victim.maplePhase = null; victim.kingdomPhase = null; victim.napoleonPhase = null;
+            victim.currentKillStreak = 0; // Reset streak on death
+
             if (victim.id === currentState.myPlayerIndex) { updateStats({ death: true, scale: victim.scale, length: victim.length }); submitScoreToLeaderboard(victim.scale); toggleUI('death'); }
             if (killer) { 
                 killer.kills++; 
+                if(killer.currentKillStreak !== undefined) killer.currentKillStreak++;
+                
                 if (killer.id === currentState.myPlayerIndex) {
-                    updateStats({ kill: true });
+                    updateStats({ kill: true, streak: killer.currentKillStreak });
                     gainXP(100);
                     addFloatingText(killer.x, killer.y, "KILL! +100 XP", "#FF0000", 30);
+                    if(killer.currentKillStreak === 5) addFloatingText(killer.x, killer.y, "RAMPAGE! (5 Streak)", "gold", 40);
                 }
             }
             createExplosion(victim.x, victim.y);
@@ -1709,8 +1731,10 @@
             if (!e.alive) return; e.alive = false;
             if (killer) { 
                 killer.kills++; 
+                if(killer.currentKillStreak !== undefined) killer.currentKillStreak++;
+
                 if (killer.id === currentState.myPlayerIndex) {
-                    updateStats({ kill: true }); 
+                    updateStats({ kill: true, streak: killer.currentKillStreak }); 
                     gainXP(50);
                     addFloatingText(killer.x, killer.y, "BOT KILL! +50 XP", "#FFA500", 25);
                 }
@@ -1720,6 +1744,7 @@
             for (let i = 0; i < e.body.length; i += stepSize) { const point = e.body[i]; if(point) gameData.food.push({ x: point.x + (Math.random() - 0.5) * 20, y: point.y + (Math.random() - 0.5) * 20, level: Math.floor(Math.random() * 3) + 1 }); }
         }
 
+        // ... [Compress State Function - Update if needed for Napoleon phase syncing] ...
         function compressState(state) {
             return {
                 mode: state.mode, shakeIntensity: Math.round(state.shakeIntensity),
@@ -1731,7 +1756,7 @@
                     id: p.id, active: p.active, dead: p.dead, x: Math.round(p.x), y: Math.round(p.y),
                     angle: Number(p.angle.toFixed(2)), scale: Number(p.scale.toFixed(2)), length: Math.round(p.length),
                     country: p.country, colorBody: p.colorBody, kills: p.kills, deaths: p.deaths,
-                    frozenUntil: p.frozenUntil || 0, abilityActive: p.abilityActive || false, lat: p.lastAbilityTime, maplePhase: p.maplePhase, kingdomPhase: p.kingdomPhase, name: p.name
+                    frozenUntil: p.frozenUntil || 0, abilityActive: p.abilityActive || false, lat: p.lastAbilityTime, maplePhase: p.maplePhase, kingdomPhase: p.kingdomPhase, napoleonPhase: p.napoleonPhase, name: p.name
                 })),
                 enemies: state.enemies.map((e) => ({ alive: e.alive, color: e.color, width: Math.round(e.width), x: Math.round(e.x), y: Math.round(e.y), angle: Number(e.angle.toFixed(2)), frozenUntil: e.frozenUntil || 0 })),
             };
@@ -1758,7 +1783,7 @@
                 cur.players = tar.players.map(tp => {
                     const existing = cur.players.find(p => p.id === tp.id);
                     if(existing) {
-                        existing.x = lerp(existing.x, tp.x, t); existing.y = lerp(existing.y, tp.y, t); existing.angle = lerpAngle(existing.angle, tp.angle, t); existing.scale = tp.scale; existing.country = tp.country; existing.dead = tp.dead; existing.name = tp.name; existing.abilityActive = tp.abilityActive; existing.maplePhase = tp.maplePhase; existing.kingdomPhase = tp.kingdomPhase;
+                        existing.x = lerp(existing.x, tp.x, t); existing.y = lerp(existing.y, tp.y, t); existing.angle = lerpAngle(existing.angle, tp.angle, t); existing.scale = tp.scale; existing.country = tp.country; existing.dead = tp.dead; existing.name = tp.name; existing.abilityActive = tp.abilityActive; existing.maplePhase = tp.maplePhase; existing.kingdomPhase = tp.kingdomPhase; existing.napoleonPhase = tp.napoleonPhase;
                         if(tp.lat) existing.lastAbilityTime = tp.lat;
                         if (!existing.body) existing.body = []; existing.body.unshift({ x: existing.x, y: existing.y }); while (existing.body.length > tp.length) existing.body.pop();
                         return existing;
@@ -1787,14 +1812,46 @@
             }
 
             const abInd = document.getElementById('ability-indicator'); const abTxt = document.getElementById('ability-text');
-            if(me.country === 'soviet' || me.country === 'golden_maple' || me.country === 'bosnian_kingdom') {
-                abInd.style.display = 'flex'; let cooldown = 60000; if (me.country === 'bosnian_kingdom') cooldown = 30000;
-                const timeSince = Date.now() - (me.lastAbilityTime || 0); const isActive = me.barrageActive || !!me.maplePhase || (me.kingdomPhase === "active");
-                if (isActive) { abTxt.innerText = "ACTIVE"; abInd.style.borderColor = (Math.floor(Date.now()/200)%2===0) ? "#fff" : "#0f0"; abTxt.style.color = "#0f0"; } else if (timeSince < cooldown) { const rem = Math.ceil((cooldown - timeSince)/1000); abTxt.innerText = rem + "s"; abInd.style.borderColor = "#555"; abTxt.style.color = "#aaa"; } else { abTxt.innerText = "READY"; abInd.style.borderColor = "#FFD700"; abTxt.style.color = "#FFD700"; }
+            if(me.country === 'soviet' || me.country === 'golden_maple' || me.country === 'bosnian_kingdom' || me.country === 'napoleonic_france') {
+                abInd.style.display = 'flex'; 
+                let cooldown = 60000; 
+                if (me.country === 'bosnian_kingdom') cooldown = 30000;
+                if (me.country === 'napoleonic_france') cooldown = 70000;
+
+                const timeSince = Date.now() - (me.lastAbilityTime || 0); 
+                const isActive = me.barrageActive || !!me.maplePhase || (me.kingdomPhase === "active") || (me.napoleonPhase === "exiled");
+                
+                if (isActive) { 
+                    abTxt.innerText = me.napoleonPhase === 'exiled' ? "EXILED" : "ACTIVE"; 
+                    abInd.style.borderColor = (Math.floor(Date.now()/200)%2===0) ? "#fff" : "#0f0"; 
+                    abTxt.style.color = "#0f0"; 
+                } else if (timeSince < cooldown) { 
+                    const rem = Math.ceil((cooldown - timeSince)/1000); 
+                    abTxt.innerText = rem + "s"; 
+                    abInd.style.borderColor = "#555"; 
+                    abTxt.style.color = "#aaa"; 
+                } else { 
+                    abTxt.innerText = "READY"; 
+                    abInd.style.borderColor = "#FFD700"; 
+                    abTxt.style.color = "#FFD700"; 
+                }
             } else { abInd.style.display = 'none'; }
 
-            ctx.fillStyle = "#080b12"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = "rgba(0, 47, 108, 0.2)"; ctx.lineWidth = 1; for (let i = 0; i < canvas.width; i += 50) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); } for (let j = 0; j < canvas.height; j += 50) { ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(canvas.width, j); ctx.stroke(); }
+            // --- RENDER LOGIC ---
+            // Special Background for Napoleon Exile
+            if (me.napoleonPhase === 'exiled') {
+                ctx.fillStyle = "#e0c090"; // Sandy/Island Color
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw water pattern
+                ctx.fillStyle = "#4FA4F4"; // Water
+                // We will render island as a circle in the center of screen (since we move relative to anchor)
+                // Actually, let's keep camera centered on player
+            } else {
+                ctx.fillStyle = "#080b12"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = "rgba(0, 47, 108, 0.2)"; ctx.lineWidth = 1; for (let i = 0; i < canvas.width; i += 50) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); } for (let j = 0; j < canvas.height; j += 50) { ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(canvas.width, j); ctx.stroke(); }
+            }
+            
             let sx = 0, sy = 0; if (gameData.shakeIntensity > 0) { sx = (Math.random() - 0.5) * gameData.shakeIntensity; sy = (Math.random() - 0.5) * gameData.shakeIntensity; gameData.shakeIntensity *= 0.9; }
 
             ctx.save(); ctx.translate(canvas.width / 2 + sx, canvas.height / 2 + sy);
@@ -1802,118 +1859,131 @@
             const startScale = 18; const zoom = Math.max(0.1, 0.6 * (30 / (30 + ((focus.scale || 18) - startScale) * 0.4)));
             ctx.scale(zoom, zoom); ctx.translate(-focus.x, -focus.y);
             
-            const vw = canvas.width / zoom; const vh = canvas.height / zoom;
-            const viewLeft = focus.x - vw/2 - 1000; const viewRight = focus.x + vw/2 + 1000;
-            const viewTop = focus.y - vh/2 - 1000; const viewBottom = focus.y + vh/2 + 1000;
-
-            ctx.lineWidth = 12; ctx.strokeStyle = "rgba(255,0,0,0.9)"; ctx.strokeRect(-WORLD_SIZE / 2, -WORLD_SIZE / 2, WORLD_SIZE, WORLD_SIZE);
-            if (me.country === "ireland" && !me.dead) { ctx.save(); ctx.strokeStyle = "rgba(0, 255, 0, 0.5)"; ctx.lineWidth = 2; ctx.setLineDash([10, 10]); gameData.enemies.forEach(e => { if (e.alive) { ctx.beginPath(); ctx.moveTo(me.x, me.y); ctx.lineTo(e.x, e.y); ctx.stroke(); } }); ctx.restore(); }
-            gameData.syrupZones.forEach((z) => { ctx.fillStyle = "rgba(184, 134, 11, 0.5)"; ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = "#DAA520"; ctx.lineWidth = 4; ctx.stroke(); });
-            
-            gameData.food.forEach((f) => { 
-                if (f.x < viewLeft || f.x > viewRight || f.y < viewTop || f.y > viewBottom) return; 
-                const level = f.level || 1; const size = FOOD_RADIUS_BASE + level * 1.5; 
-                if (f.isGolden) { ctx.fillStyle = "rgba(255, 215, 0, 0.4)"; ctx.beginPath(); ctx.arc(f.x, f.y, size+5, 0, TWO_PI); ctx.fill(); ctx.fillStyle = "#FFD700"; } else { ctx.fillStyle = "orange"; } 
-                ctx.beginPath(); ctx.arc(f.x, f.y, size, 0, TWO_PI); ctx.fill(); 
-                if (level > 8) { ctx.globalAlpha = 0.3; ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(f.x, f.y, size + 3, 0, TWO_PI); ctx.fill(); ctx.globalAlpha = 1.0; } 
-            });
-
-            gameData.mines.forEach((m) => {
-                if (m.x < viewLeft || m.x > viewRight || m.y < viewTop || m.y > viewBottom) return; 
-                if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) { ctx.fillStyle = "rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, TWO_PI); ctx.fill(); }
-                const r = 25; const d = r * 2;
-
-                // --- NEW: RENDER THE NUKE VISUAL (SCALED & PULSING) ---
-                if (m.type === "bosnian_nuke") {
-                     const pulse = (Date.now() % 500) / 500;
-                     const baseSize = m.dropSize || 30;
-                     const size = baseSize * (0.9 + pulse * 0.2);
-                     ctx.fillStyle = pulse > 0.5 ? "red" : "#FFD700";
-                     ctx.beginPath(); ctx.arc(m.x, m.y, size, 0, TWO_PI); ctx.fill();
-                     if (m.fuseEnd) {
-                         const left = Math.max(0, (m.fuseEnd - Date.now()) / 1000).toFixed(1);
-                         ctx.fillStyle = "white"; 
-                         ctx.font = `bold ${Math.max(16, baseSize/1.5)}px Arial`; 
-                         ctx.textAlign = "center";
-                         ctx.fillText(left + "s", m.x, m.y - size - 10);
-                     }
-                     ctx.strokeStyle = "rgba(255, 0, 0, 0.3)"; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(m.x, m.y, m.maxRadius, 0, TWO_PI); ctx.stroke();
-                     return;
-                }
-                // -----------------------------------------------------
-
-                if (m.type === "bosnian") { ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#002395"; ctx.fillRect(m.x-r, m.y-r, r*2, r*2); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(m.x, m.y, r/2, 0, TWO_PI); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#FFD700"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke(); return; }
-                ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3); ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3); ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(m.x - 10, m.y - 10); ctx.lineTo(m.x, m.y - 10); ctx.lineTo(m.x, m.y + 5); ctx.lineTo(m.x - 5, m.y + 12); ctx.lineTo(m.x - 10, m.y + 5); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#333"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke();
-            });
-
-            const allEntities = [...gameData.players, ...gameData.enemies];
-            allEntities.forEach((p) => {
-                if (p.dead || p.alive === false) return;
-                if (p.x < viewLeft - p.length && p.x > viewRight + p.length && p.y < viewTop - p.length && p.y > viewBottom + p.length) return; 
-
-                if (p.frozenUntil && Date.now() < p.frozenUntil) { ctx.fillStyle="rgba(0, 255, 255, 0.4)"; ctx.beginPath(); ctx.arc(p.x, p.y, (p.scale||12)+10, 0, TWO_PI); ctx.fill(); } 
-                else if (p.country === "soviet" && p.abilityActive) { ctx.fillStyle="rgba(255, 0, 0, 0.4)"; ctx.beginPath(); ctx.arc(p.x, p.y, (p.scale||12)+20, 0, TWO_PI); ctx.fill(); } 
-                else if (p.country === "golden_maple" && p.maplePhase === "harvest") { ctx.strokeStyle = "rgba(218, 165, 32, 0.4)"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(p.x, p.y, 5 * CELL, 0, TWO_PI); ctx.stroke(); }
-                if (p.country === "bosnian_kingdom" && p.kingdomPhase === "active") { ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, 300, 0, TWO_PI); ctx.strokeStyle = "rgba(0, 35, 149, 0.6)"; ctx.lineWidth = 10; ctx.stroke(); ctx.fillStyle = "rgba(0, 35, 149, 0.2)"; ctx.fill(); ctx.restore(); }
+            // If Exiled, draw island relative to anchor
+            if (me.napoleonPhase === 'exiled') {
+                const anchor = me.exileAnchor || {x: me.x, y: me.y};
+                const r = me.scale * 15;
+                ctx.fillStyle = "#e0c090"; // Sand
+                ctx.beginPath(); ctx.arc(anchor.x, anchor.y, r, 0, TWO_PI); ctx.fill();
+                ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 10; ctx.stroke();
                 
-                const bodyW = p.scale || p.width || 12; ctx.lineWidth = bodyW * 1.2; ctx.strokeStyle = (p.frozenUntil && Date.now() < p.frozenUntil) ? "cyan" : (p.colorBody || p.color || "white"); ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); if (p.body.length) { ctx.moveTo(p.body[0].x, p.body[0].y); p.body.forEach(b => ctx.lineTo(b.x, b.y)); ctx.stroke(); } 
-                const r = bodyW * 0.65; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle + Math.PI / 2); ctx.beginPath(); ctx.arc(0, 0, r, 0, TWO_PI); ctx.clip();
-                drawFlag(ctx, p.country, r, p.color); ctx.restore();
-                if(p.name && zoom > 0.3) { ctx.fillStyle = "white"; ctx.font = `bold ${Math.max(12, r)}px Arial`; ctx.textAlign = "center"; ctx.fillText(p.name, p.x, p.y - r - 10); }
-            });
-
-            // --- HIGH GRAPHICS JAGGED EXPLOSION RENDERER (Updated) ---
-            gameData.explosions.forEach((ex) => { 
-                const life = ex.alpha; // 1.0 down to 0
-                const r = ex.radius;
-                
-                // OUTER LAYER (Smoke/Fire) - Lasts longer, expands slower later
-                // Color Logic: Fire (Yellow/Orange) -> Dark Smoke (Gray/Black)
-                let outerCol;
-                if (life > 0.5) outerCol = `rgba(255, ${Math.floor(100 + 155 * (life - 0.5) * 2)}, 0, ${life})`; // Orange -> Yellow
-                else outerCol = `rgba(${Math.floor(100 * life * 2)}, ${Math.floor(100 * life * 2)}, ${Math.floor(100 * life * 2)}, ${life})`; // Grey Fade
-
-                // Draw Jagged Cloud Shape (Outer)
-                const spikes = 20;
+                // Draw Ocean around
+                ctx.save();
                 ctx.beginPath();
-                for (let i = 0; i <= spikes * 2; i++) {
-                    const angle = (Math.PI * 2 * i) / (spikes * 2);
-                    const noise = Math.sin(angle * 7 + ex.x * 0.1) * Math.cos(angle * 5 + ex.y * 0.1);
-                    const r_mod = r * (0.9 + 0.1 * noise);
-                    const px = ex.x + Math.cos(angle) * r_mod;
-                    const py = ex.y + Math.sin(angle) * r_mod;
-                    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-                }
-                ctx.closePath();
-                ctx.fillStyle = outerCol;
-                ctx.fill();
+                ctx.rect(anchor.x - r*2, anchor.y - r*2, r*4, r*4);
+                ctx.arc(anchor.x, anchor.y, r, 0, TWO_PI, true); // Cut out hole
+                ctx.clip();
+                ctx.fillStyle = "#4FA4F4";
+                ctx.fillRect(anchor.x - r*2, anchor.y - r*2, r*4, r*4);
+                ctx.restore();
 
-                // INNER CORE (Super Bright) - Disappears faster (life < 0.4 is gone)
-                if (life > 0.4) {
-                    const coreLife = (life - 0.4) / 0.6; // Normalized 0 to 1 for the core phase
-                    const coreR = r * 0.6; // Core is smaller
-                    ctx.fillStyle = `rgba(255, 255, ${Math.floor(200 + 55 * coreLife)}, ${coreLife})`;
+                // Draw Blue Orbs
+                pocketFood.forEach(f => {
+                    ctx.shadowBlur = 10; ctx.shadowColor = "cyan";
+                    ctx.fillStyle = "cyan"; ctx.beginPath(); ctx.arc(f.x, f.y, 25, 0, TWO_PI); ctx.fill();
+                    ctx.shadowBlur = 0;
+                });
+                
+                // Only draw self in this mode (and maybe chat bubbles)
+                drawPlayer(me, zoom);
+                
+            } else {
+                // NORMAL WORLD RENDERING
+                const vw = canvas.width / zoom; const vh = canvas.height / zoom;
+                const viewLeft = focus.x - vw/2 - 1000; const viewRight = focus.x + vw/2 + 1000;
+                const viewTop = focus.y - vh/2 - 1000; const viewBottom = focus.y + vh/2 + 1000;
+
+                ctx.lineWidth = 12; ctx.strokeStyle = "rgba(255,0,0,0.9)"; ctx.strokeRect(-WORLD_SIZE / 2, -WORLD_SIZE / 2, WORLD_SIZE, WORLD_SIZE);
+                if (me.country === "ireland" && !me.dead) { ctx.save(); ctx.strokeStyle = "rgba(0, 255, 0, 0.5)"; ctx.lineWidth = 2; ctx.setLineDash([10, 10]); gameData.enemies.forEach(e => { if (e.alive) { ctx.beginPath(); ctx.moveTo(me.x, me.y); ctx.lineTo(e.x, e.y); ctx.stroke(); } }); ctx.restore(); }
+                gameData.syrupZones.forEach((z) => { ctx.fillStyle = "rgba(184, 134, 11, 0.5)"; ctx.beginPath(); ctx.arc(z.x, z.y, z.radius, 0, TWO_PI); ctx.fill(); ctx.strokeStyle = "#DAA520"; ctx.lineWidth = 4; ctx.stroke(); });
+                
+                gameData.food.forEach((f) => { 
+                    if (f.x < viewLeft || f.x > viewRight || f.y < viewTop || f.y > viewBottom) return; 
+                    const level = f.level || 1; const size = FOOD_RADIUS_BASE + level * 1.5; 
+                    if (f.isGolden) { ctx.fillStyle = "rgba(255, 215, 0, 0.4)"; ctx.beginPath(); ctx.arc(f.x, f.y, size+5, 0, TWO_PI); ctx.fill(); ctx.fillStyle = "#FFD700"; } else { ctx.fillStyle = "orange"; } 
+                    ctx.beginPath(); ctx.arc(f.x, f.y, size, 0, TWO_PI); ctx.fill(); 
+                    if (level > 8) { ctx.globalAlpha = 0.3; ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(f.x, f.y, size + 3, 0, TWO_PI); ctx.fill(); ctx.globalAlpha = 1.0; } 
+                });
+
+                gameData.mines.forEach((m) => {
+                    if (m.x < viewLeft || m.x > viewRight || m.y < viewTop || m.y > viewBottom) return; 
+                    if (m.state === "triggered" && Math.floor(Date.now() / 100) % 2 === 0) { ctx.fillStyle = "rgba(255,0,0,0.3)"; ctx.beginPath(); ctx.arc(m.x, m.y, 200, 0, TWO_PI); ctx.fill(); }
+                    const r = 25; const d = r * 2;
+
+                    if (m.type === "bosnian_nuke") {
+                        const pulse = (Date.now() % 500) / 500;
+                        const baseSize = m.dropSize || 30;
+                        const size = baseSize * (0.9 + pulse * 0.2);
+                        ctx.fillStyle = pulse > 0.5 ? "red" : "#FFD700";
+                        ctx.beginPath(); ctx.arc(m.x, m.y, size, 0, TWO_PI); ctx.fill();
+                        if (m.fuseEnd) {
+                            const left = Math.max(0, (m.fuseEnd - Date.now()) / 1000).toFixed(1);
+                            ctx.fillStyle = "white"; 
+                            ctx.font = `bold ${Math.max(16, baseSize/1.5)}px Arial`; 
+                            ctx.textAlign = "center";
+                            ctx.fillText(left + "s", m.x, m.y - size - 10);
+                        }
+                        ctx.strokeStyle = "rgba(255, 0, 0, 0.3)"; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(m.x, m.y, m.maxRadius, 0, TWO_PI); ctx.stroke();
+                        return;
+                    }
+
+                    if (m.type === "bosnian") { ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#002395"; ctx.fillRect(m.x-r, m.y-r, r*2, r*2); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(m.x, m.y, r/2, 0, TWO_PI); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#FFD700"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke(); return; }
+                    ctx.save(); ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.clip(); ctx.fillStyle = "#C6363C"; ctx.fillRect(m.x - r, m.y - r, d, d / 3); ctx.fillStyle = "#0C4076"; ctx.fillRect(m.x - r, m.y - r + d / 3, d, d / 3); ctx.fillStyle = "#FFFFFF"; ctx.fillRect(m.x - r, m.y - r + (2 * d) / 3, d, d / 3); ctx.fillStyle = "white"; ctx.beginPath(); ctx.moveTo(m.x - 10, m.y - 10); ctx.lineTo(m.x, m.y - 10); ctx.lineTo(m.x, m.y + 5); ctx.lineTo(m.x - 5, m.y + 12); ctx.lineTo(m.x - 10, m.y + 5); ctx.fill(); ctx.restore(); ctx.strokeStyle = m.state === "triggered" ? "red" : "#333"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, TWO_PI); ctx.stroke();
+                });
+
+                const allEntities = [...gameData.players, ...gameData.enemies];
+                allEntities.forEach((p) => {
+                    if (p.dead || p.alive === false) return;
+                    // Don't render exiled players in normal world
+                    if (p.napoleonPhase === 'exiled') return; 
+                    if (p.x < viewLeft - p.length && p.x > viewRight + p.length && p.y < viewTop - p.length && p.y > viewBottom + p.length) return; 
+                    drawPlayer(p, zoom);
+                });
+
+                gameData.explosions.forEach((ex) => { 
+                    const life = ex.alpha; 
+                    const r = ex.radius;
+                    let outerCol;
+                    if (life > 0.5) outerCol = `rgba(255, ${Math.floor(100 + 155 * (life - 0.5) * 2)}, 0, ${life})`; 
+                    else outerCol = `rgba(${Math.floor(100 * life * 2)}, ${Math.floor(100 * life * 2)}, ${Math.floor(100 * life * 2)}, ${life})`; 
+
+                    const spikes = 20;
                     ctx.beginPath();
-                    // Make core slightly jagged too
                     for (let i = 0; i <= spikes * 2; i++) {
                         const angle = (Math.PI * 2 * i) / (spikes * 2);
-                        const noise = Math.sin(angle * 3 + ex.x) * Math.cos(angle * 2 + ex.y);
-                        const r_mod = coreR * (0.8 + 0.2 * noise);
+                        const noise = Math.sin(angle * 7 + ex.x * 0.1) * Math.cos(angle * 5 + ex.y * 0.1);
+                        const r_mod = r * (0.9 + 0.1 * noise);
                         const px = ex.x + Math.cos(angle) * r_mod;
                         const py = ex.y + Math.sin(angle) * r_mod;
                         if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
                     }
+                    ctx.closePath();
+                    ctx.fillStyle = outerCol;
                     ctx.fill();
-                }
 
-                // SHOCKWAVE - Only at the start
-                if (life > 0.8) {
-                    ctx.strokeStyle = `rgba(255, 255, 200, ${(life - 0.8) * 5})`;
-                    ctx.lineWidth = 5;
-                    ctx.beginPath(); ctx.arc(ex.x, ex.y, r * 1.2, 0, TWO_PI); ctx.stroke();
-                }
-            });
-            // ---------------------------------------------------------
+                    if (life > 0.4) {
+                        const coreLife = (life - 0.4) / 0.6; 
+                        const coreR = r * 0.6; 
+                        ctx.fillStyle = `rgba(255, 255, ${Math.floor(200 + 55 * coreLife)}, ${coreLife})`;
+                        ctx.beginPath();
+                        for (let i = 0; i <= spikes * 2; i++) {
+                            const angle = (Math.PI * 2 * i) / (spikes * 2);
+                            const noise = Math.sin(angle * 3 + ex.x) * Math.cos(angle * 2 + ex.y);
+                            const r_mod = coreR * (0.8 + 0.2 * noise);
+                            const px = ex.x + Math.cos(angle) * r_mod;
+                            const py = ex.y + Math.sin(angle) * r_mod;
+                            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                        }
+                        ctx.fill();
+                    }
+
+                    if (life > 0.8) {
+                        ctx.strokeStyle = `rgba(255, 255, 200, ${(life - 0.8) * 5})`;
+                        ctx.lineWidth = 5;
+                        ctx.beginPath(); ctx.arc(ex.x, ex.y, r * 1.2, 0, TWO_PI); ctx.stroke();
+                    }
+                });
+            }
             
             for(let i = floatingTexts.length - 1; i >= 0; i--) {
                 let ft = floatingTexts[i]; ft.y += ft.dy; ft.life -= 0.02;
@@ -1924,25 +1994,61 @@
             ctx.restore();
         }
 
+        function drawPlayer(p, zoom) {
+            if (p.frozenUntil && Date.now() < p.frozenUntil) { ctx.fillStyle="rgba(0, 255, 255, 0.4)"; ctx.beginPath(); ctx.arc(p.x, p.y, (p.scale||12)+10, 0, TWO_PI); ctx.fill(); } 
+            else if (p.country === "soviet" && p.abilityActive) { ctx.fillStyle="rgba(255, 0, 0, 0.4)"; ctx.beginPath(); ctx.arc(p.x, p.y, (p.scale||12)+20, 0, TWO_PI); ctx.fill(); } 
+            else if (p.country === "golden_maple" && p.maplePhase === "harvest") { ctx.strokeStyle = "rgba(218, 165, 32, 0.4)"; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(p.x, p.y, 5 * CELL, 0, TWO_PI); ctx.stroke(); }
+            if (p.country === "bosnian_kingdom" && p.kingdomPhase === "active") { ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, 300, 0, TWO_PI); ctx.strokeStyle = "rgba(0, 35, 149, 0.6)"; ctx.lineWidth = 10; ctx.stroke(); ctx.fillStyle = "rgba(0, 35, 149, 0.2)"; ctx.fill(); ctx.restore(); }
+            
+            const bodyW = p.scale || p.width || 12; ctx.lineWidth = bodyW * 1.2; ctx.strokeStyle = (p.frozenUntil && Date.now() < p.frozenUntil) ? "cyan" : (p.colorBody || p.color || "white"); ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); if (p.body.length) { ctx.moveTo(p.body[0].x, p.body[0].y); p.body.forEach(b => ctx.lineTo(b.x, b.y)); ctx.stroke(); } 
+            const r = bodyW * 0.65; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle + Math.PI / 2); ctx.beginPath(); ctx.arc(0, 0, r, 0, TWO_PI); ctx.clip();
+            drawFlag(ctx, p.country, r, p.color); ctx.restore();
+            if(p.name && zoom > 0.3) { ctx.fillStyle = "white"; ctx.font = `bold ${Math.max(12, r)}px Arial`; ctx.textAlign = "center"; ctx.fillText(p.name, p.x, p.y - r - 10); }
+        }
+
         function drawFlag(ctx, country, r, fallbackColor) {
             const rect = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
             if (!country) { ctx.fillStyle = fallbackColor || "white"; ctx.fillRect(-r, -r, r * 2, r * 2); return; }
             if (country === 'bosnia') { rect(-r, -r, r * 2, r * 2, "#002F6C"); ctx.fillStyle = "#FECB00"; ctx.beginPath(); ctx.moveTo(r * 0.2, -r); ctx.lineTo(r * 0.2, r); ctx.lineTo(r, -r * 0.5); ctx.fill(); ctx.fillStyle = "white"; for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.6 + i * r * 0.4, r * 0.1, 0, TWO_PI); ctx.fill(); } }
             
-            // --- UPDATED BOSNIAN KINGDOM SKIN (KOTROMANIĆ / ANJOU STYLE) ---
             else if (country === 'bosnian_kingdom') { 
-                // Royal Blue Background
                 rect(-r, -r, r * 2, r * 2, "#002395"); 
-                // White Diagonal Band (The Bend)
                 ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.beginPath(); ctx.moveTo(-r, -r * 0.2); ctx.lineTo(r, r * 0.8); ctx.lineTo(r, r * 0.2); ctx.lineTo(-r, -r * 0.8); ctx.fill();
-                // The Gold Anjou Cross Overlay
                 ctx.fillStyle = "#FFD700"; ctx.fillRect(-r*0.15, -r*0.9, r*0.3, r*1.8); ctx.fillRect(-r*0.7, -r*0.4, r*1.4, r*0.3);
-                // Decorative Lilies (Circles/Triangles representation)
                 ctx.fillStyle = "#FECB00"; ctx.beginPath(); ctx.arc(-r*0.5, r*0.5, r*0.15, 0, TWO_PI); ctx.fill(); ctx.beginPath(); ctx.arc(r*0.5, -r*0.5, r*0.15, 0, TWO_PI); ctx.fill();
-                // Gold Border
                 ctx.strokeStyle = "#D4AF37"; ctx.lineWidth = r * 0.1; ctx.strokeRect(-r, -r, r*2, r*2);
             }
-            // -----------------------------------------------------------------
+
+            // --- NAPOLEONIC FRANCE FLAG ---
+            else if (country === 'napoleonic_france') {
+                // Vertical Tricolor
+                rect(-r, -r, (r * 2) / 3, r * 2, "#0055A4"); // Blue
+                rect(-r + (r * 2) / 3, -r, (r * 2) / 3, r * 2, "#FFFFFF"); // White
+                rect(-r + (2 * r * 2) / 3, -r, (r * 2) / 3, r * 2, "#EF4135"); // Red
+                
+                // Gold Fleur-de-lis pattern on Blue and Red
+                ctx.fillStyle = "#FFD700";
+                const patternSize = r / 3;
+                for(let py = -r; py < r; py += patternSize*1.5) {
+                    // Left Blue
+                    ctx.beginPath(); ctx.arc(-r + r/3, py, 2, 0, TWO_PI); ctx.fill(); 
+                    // Right Red
+                    ctx.beginPath(); ctx.arc(r - r/3, py + patternSize/2, 2, 0, TWO_PI); ctx.fill();
+                }
+
+                // Imperial Eagle (Simplified Gold shape in center)
+                ctx.fillStyle = "#DAA520";
+                ctx.beginPath();
+                ctx.moveTo(0, -r*0.4); // Head
+                ctx.lineTo(r*0.25, -r*0.1); // Wing R
+                ctx.lineTo(r*0.1, r*0.3); // Leg R
+                ctx.lineTo(-r*0.1, r*0.3); // Leg L
+                ctx.lineTo(-r*0.25, -r*0.1); // Wing L
+                ctx.fill();
+                // Crown above
+                ctx.fillStyle = "#FFD700";
+                ctx.fillRect(-r*0.15, -r*0.6, r*0.3, r*0.15);
+            }
 
             else if (country === 'russia') { rect(-r, -r, r * 2, (r * 2) / 3, "white"); rect(-r, -r + (r * 2) / 3, r * 2, (r * 2) / 3, "#0039A6"); rect(-r, -r + (2 * r * 2) / 3, r * 2, (r * 2) / 3, "#D52B1E"); }
             else if (country === 'croatia') { rect(-r, -r, r*2, (r*2)/3, "red"); rect(-r, -r+(r*2)/3, r*2, (r*2)/3, "white"); rect(-r, -r+4*r/3, r*2, (r*2)/3, "blue"); ctx.fillStyle = "red"; ctx.fillRect(-r/2, -r/2, r, r); ctx.fillStyle = "white"; for(let y=0; y<2; y++) for(let x=0; x<2; x++) { if((x+y)%2===0) ctx.fillRect(-r/2 + x*(r/2), -r/2 + y*(r/2), r/2, r/2); } }
@@ -1968,22 +2074,16 @@
             else if (country === 'finland') { rect(-r, -r, r * 2, r * 2, "white"); rect(-r, -r + r * 0.8, r * 2, r * 0.4, "#003580"); rect(-r + r * 0.6, -r, r * 0.4, r * 2, "#003580"); }
             else if (country === 'portugal') { rect(-r, -r, r * 0.8, r * 2, "#046A38"); rect(-r + r * 0.8, -r, r * 1.2, r * 2, "#DA291C"); ctx.fillStyle = "#FFD700"; ctx.beginPath(); ctx.arc(-r * 0.2, 0, r * 0.4, 0, TWO_PI); ctx.fill(); }
             
-            // --- NEW FLAGS: TURKEY (Lvl 4) & CHINA (Lvl 6) ---
             else if (country === 'turkey') {
                 rect(-r, -r, r*2, r*2, "#E30A17");
-                // White Circle
                 ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(-r*0.2, 0, r*0.5, 0, TWO_PI); ctx.fill();
-                // Red Circle to make crescent
                 ctx.fillStyle = "#E30A17"; ctx.beginPath(); ctx.arc(-r*0.1, 0, r*0.4, 0, TWO_PI); ctx.fill();
-                // Star
                 ctx.fillStyle = "white"; ctx.beginPath(); ctx.arc(r*0.4, 0, r*0.15, 0, TWO_PI); ctx.fill();
             }
             else if (country === 'china') {
                 rect(-r, -r, r*2, r*2, "#DE2910");
                 ctx.fillStyle = "#FFDE00"; 
-                // Big Star
                 ctx.beginPath(); ctx.arc(-r*0.5, -r*0.5, r*0.3, 0, TWO_PI); ctx.fill();
-                // 4 Small Stars
                 ctx.beginPath(); ctx.arc(-r*0.1, -r*0.8, r*0.1, 0, TWO_PI); ctx.fill();
                 ctx.beginPath(); ctx.arc(r*0.1, -r*0.6, r*0.1, 0, TWO_PI); ctx.fill();
                 ctx.beginPath(); ctx.arc(r*0.1, -r*0.3, r*0.1, 0, TWO_PI); ctx.fill();
@@ -2002,6 +2102,7 @@
             document.getElementById('spectator-label').style.display = currentState.isSpectating ? 'block' : 'none';
         }
 
+        // ... [Rest of UI Functions: renderSkinGrid, submitScoreToLeaderboard, startScanner, etc. remain the same] ...
         function renderSkinGrid() {
             const grid = document.getElementById('skin-grid'); grid.innerHTML = '';
             const list = currentState.skinCategory === 'normal' ? SKINS_NORMAL : SKINS_SPECIAL;
@@ -2034,7 +2135,6 @@
                             const nameHtml = isOfficial ? `<b style="color:#FFD700">★ OFFICIAL SERVER</b>` : `<b>${data.host}</b>`;
                             const btnColor = isOfficial ? 'gold' : '#28a745'; const btnText = isOfficial ? 'JOIN NOW' : 'SPECTATE'; const txtColor = isOfficial ? 'black' : 'white';
                             row.innerHTML = `<div>${nameHtml}</div><div style="background:${btnColor}; padding:3px 6px; border-radius:3px; font-size:10px; color:${txtColor}; font-weight:bold;">${btnText}</div>`;
-                            // Join Official as Player, or Spectate others
                             row.onclick = () => { if(isOfficial) initGameClient(doc.id); else initSpectate(doc.id); };
                             list.appendChild(row);
                         }
@@ -2102,3 +2202,4 @@
     </script>
 </body>
 </html>
+```
