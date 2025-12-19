@@ -719,13 +719,32 @@
         const SPRINT_COST = 0.5;
         const BASE_SPEED = 4.2;
         const TURN_SPEED = 0.09;
-        const MAX_ENEMIES = 5; 
+        const MAX_ENEMIES = 20; // UPDATED to 20 Max AI Snakes
         const SIZE_GAIN_PER_LEVEL = 0.15;
         const FOOD_RADIUS_BASE = 6;
         const LENGTH_GAIN = 8;
         const BROADCAST_RATE = 45;
         const INTERPOLATION_SPEED = 0.35;
         const TWO_PI = Math.PI * 2; 
+
+        // AI BOT CONFIGURATIONS
+        const AI_TYPES = {
+            croatia: { 
+                type: 'dumb', skin: 'croatia', color: '#CC0000', chance: 0.30,
+                nppv: 0.2, // Prediction Time (0.1 - 0.2s)
+                weights: { food: 5, collision: 3, space: 1, boost: 2, mine: 0.5, enemy: 1, wall: 2 } 
+            },
+            serbia: { 
+                type: 'standard', skin: 'serbia', color: '#C6363C', chance: 0.60,
+                nppv: 0.8, // Prediction Time (0.5 - 0.8s)
+                weights: { food: 8, collision: 7, space: 5, boost: 5, mine: 3, enemy: 4, wall: 5 }
+            },
+            russia: { 
+                type: 'smart', skin: 'russia', color: '#FFFFFF', chance: 0.10,
+                nppv: 1.5, // Prediction Time (0.8 - 1.5s)
+                weights: { food: 10, collision: 15, space: 12, boost: 7, mine: 6, enemy: 10, escape: 8, wall: 6 }
+            }
+        };
 
         const SKINS_NORMAL = [
             "bosnia", "russia", "germany", "france", "canada", "ukraine", 
@@ -1132,24 +1151,23 @@
         }
 
         function spawnOneEnemy() {
-            let maxPlayerScale = 0;
-            if(gameData.players) maxPlayerScale = Math.max(...gameData.players.map(p => p.scale || 18));
+            // DETERMINE AI PERSONALITY BASED ON WEIGHTED CHANCE
+            const rand = Math.random();
+            let personality = 'serbia'; // Default
             
-            const canSpawnKamikaze = maxPlayerScale >= 100;
-            const isKamikaze = canSpawnKamikaze && Math.random() < 0.05;
+            if (rand < AI_TYPES.croatia.chance) { // 30%
+                personality = 'croatia';
+            } else if (rand > (1.0 - AI_TYPES.russia.chance)) { // Top 10%
+                personality = 'russia';
+            }
+            // else remain Serbia (~60%)
 
-            const startLen = 140 + Math.random() * 100; 
+            const cfg = AI_TYPES[personality];
+
+            const startLen = 140 + Math.random() * 50; 
             const startWidth = 14;
-            
-            const speed = isKamikaze ? 25.0 : (2.5 + Math.random()) * 1.1; 
-            const turn = isKamikaze ? 0.30 : 0.08;
-            
-            let country = "serbia"; 
-            let color = "#C6363C"; 
-            if (isKamikaze) {
-                country = "croatia"; 
-                color = "#CC0000";   
-            } 
+            const speed = (2.5 + Math.random()) * 1.1; 
+            const turn = personality === 'russia' ? 0.12 : (personality === 'croatia' ? 0.30 : 0.08);
 
             let spawnX, spawnY;
             let safe = false;
@@ -1158,20 +1176,16 @@
                 spawnX = randPosCell();
                 spawnY = randPosCell();
                 safe = true;
-                
                 for(let p of gameData.players) {
                     if(!p.dead && dist({x:spawnX, y:spawnY}, p) < 2000) { safe = false; break; }
-                }
-                if(safe) {
-                    for(let e of gameData.enemies) {
-                         if(e.alive && dist({x:spawnX, y:spawnY}, e) < 1500) { safe = false; break; }
-                    }
                 }
                 attempts++;
             }
 
             gameData.enemies.push({ 
-                type: isKamikaze ? 'kamikaze' : 'normal',
+                aiType: cfg.type, // 'dumb', 'standard', or 'smart'
+                weights: cfg.weights,
+                nppv: cfg.nppv,
                 x: spawnX, 
                 y: spawnY, 
                 angle: Math.random() * Math.PI * 2, 
@@ -1180,16 +1194,15 @@
                 width: startWidth, 
                 baseScale: startWidth, 
                 speed: speed, 
-                boostSpeed: speed * (isKamikaze ? 1.0 : 1.5), 
+                boostSpeed: speed * 1.5, 
                 turnSpeed: turn, 
                 alive: true, 
-                color: color, 
-                country: country, 
+                color: cfg.color, 
+                country: cfg.skin, 
                 frozenUntil: 0,
-                campAnchor: {x: spawnX, y: spawnY},
-                campStart: Date.now(),
-                forcedMoveUntil: 0,
-                forcedAngle: 0
+                // AI Specific internal state
+                currentState: 'wander',
+                lastDecisionTime: 0
             });
         }
 
@@ -1205,7 +1218,8 @@
         function updateHostLogic() {
             gameData.enemies = gameData.enemies.filter(e => e.alive);
             const isOfficialServer = gameData.mode === "server";
-            if (!isOfficialServer && gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.02) { spawnOneEnemy(); }
+            // Check respawn (20 max)
+            if (!isOfficialServer && gameData.enemies.length < MAX_ENEMIES && Math.random() < 0.05) { spawnOneEnemy(); }
             if (currentState.isDedicatedServer && keys['r']) { resetWorld(true); }
 
             gameData.players.forEach(p => {
@@ -1332,203 +1346,235 @@
             p.body.unshift({ x: p.x, y: p.y }); while (p.body.length > p.length) p.body.pop();
         }
 
+        // --- UPDATED AI SYSTEM (NATIONAL PERSONALITIES) ---
         function updateAI() {
             const state = gameData;
             const now = Date.now();
-            const AGGRO_RADIUS = 900; 
+            const AGGRO_RADIUS = 1500;
+            
+            // Helper to predict a point in the future
+            const predict = (ent, timeInSec) => {
+                // Approximate speed based on boosting logic would be better, but basic speed is fine
+                const spd = ent.sprint ? (ent.speed * 1.5) : ent.speed; 
+                // speed is units/frame (approx 16ms), convert timeInSec to frames
+                const frames = timeInSec * 60;
+                return {
+                    x: ent.x + Math.cos(ent.angle) * spd * frames,
+                    y: ent.y + Math.sin(ent.angle) * spd * frames
+                };
+            };
 
             state.enemies.forEach((enemy) => {
                 if (!enemy.alive) return;
                 if (enemy.frozenUntil && now < enemy.frozenUntil) return;
-
-                if (!enemy.campAnchor) { enemy.campAnchor = {x: enemy.x, y: enemy.y}; enemy.campStart = now; }
-                const CAMP_RADIUS_SQ = 450 * 450; 
-                const CAMP_TIME = 3000; 
-
-                if (enemy.type !== 'kamikaze') {
-                    if (distSq(enemy, enemy.campAnchor) > CAMP_RADIUS_SQ) {
-                        enemy.campAnchor = {x: enemy.x, y: enemy.y};
-                        enemy.campStart = now;
-                    } else if (now - enemy.campStart > CAMP_TIME) {
-                        enemy.forcedMoveUntil = now + 2500; 
-                        enemy.forcedAngle = Math.random() * Math.PI * 2; 
-                        enemy.campStart = now; 
-                    }
-                }
-
+                
+                // --- UPDATE PHYSICAL PROPERTIES ---
                 if (!enemy.baseScale) enemy.baseScale = 12;
-                const currentCalculatedWidth = 12 + (enemy.length - 140) / 4; 
-                if (currentCalculatedWidth > enemy.baseScale) enemy.baseScale = currentCalculatedWidth;
+                const calculatedWidth = 12 + (enemy.length - 140) / 4; 
+                if (calculatedWidth > enemy.baseScale) enemy.baseScale = calculatedWidth;
                 enemy.width = enemy.baseScale;
-
+                
+                // Syrup Debuffs
                 let aiSpeedMult = 1.0;
-                let aiTurnMult = 1.0;
-                state.syrupZones.forEach((zone) => {
-                    if (distSq(enemy, zone) < zone.radius * zone.radius) {
-                        aiSpeedMult = 0.4;
-                        aiTurnMult = 0.33;
-                    }
-                });
+                state.syrupZones.forEach((zone) => { if (distSq(enemy, zone) < zone.radius**2) aiSpeedMult = 0.4; });
 
-                let finalX = 0; 
-                let finalY = 0;
-                let forceSprint = false;
+                // --- PREPARE INPUTS FOR DECISION ---
+                const weights = enemy.weights;
+                const lookAheadTime = enemy.nppv; 
 
-                if (now < enemy.forcedMoveUntil) {
-                    finalX = Math.cos(enemy.forcedAngle) * 1000;
-                    finalY = Math.sin(enemy.forcedAngle) * 1000;
-                    forceSprint = true; 
-                } 
-                else {
-                    let target = null;
-                    let targetType = 'none';
-                    let bestDist = Infinity;
-
-                    state.players.forEach(p => {
-                        if (!p.dead && p.napoleonPhase !== 'exiled') {
-                            const d = dist(enemy, p);
-                            if (d < AGGRO_RADIUS && d < bestDist) {
-                                bestDist = d;
-                                target = p;
-                                targetType = 'player';
-                            }
-                        }
-                    });
-
-                    if (!target) {
-                        state.enemies.forEach(other => {
-                            if (other !== enemy && other.alive) {
-                                const d = dist(enemy, other);
-                                if (d < AGGRO_RADIUS && d < bestDist) {
-                                    bestDist = d;
-                                    target = other;
-                                    targetType = 'enemy';
-                                }
-                            }
-                        });
-                    }
-
-                    if (target) {
-                        finalX += (target.x - enemy.x) * 3.5;
-                        finalY += (target.y - enemy.y) * 3.5;
-                        for(let i=0; i < target.body.length; i+=3) { 
-                            const b = target.body[i]; 
-                            const bd = dist(enemy, b); 
-                            if(bd < 400) { 
-                                const push = 60000 / (bd + 1); 
-                                finalX -= (b.x - enemy.x) * push; 
-                                finalY -= (b.y - enemy.y) * push; 
-                            } 
-                        }
-                        forceSprint = true; 
-                    } else {
-                        if (!enemy.targetX || dist(enemy, {x: enemy.targetX, y: enemy.targetY}) < 400) {
-                            enemy.targetX = randPosCell();
-                            enemy.targetY = randPosCell();
-                        }
-                        finalX = enemy.targetX - enemy.x;
-                        finalY = enemy.targetY - enemy.y;
+                // 1. DUMB AI (CROATIA) BEHAVIOR: Purely Reactive or Random
+                // - Only avoids walls if VERY close.
+                // - Only avoids collisions if touching.
+                // - Head mostly empty logic.
+                if (enemy.aiType === 'dumb') {
+                     // Wall Check (Panic Turn)
+                     if (Math.abs(enemy.x) > WORLD_SIZE/2 - 200 || Math.abs(enemy.y) > WORLD_SIZE/2 - 200) {
+                        const angleToCenter = Math.atan2(-enemy.y, -enemy.x);
+                        let diff = normalizeAngle(angleToCenter - enemy.angle);
+                        enemy.angle += (diff > 0 ? 0.3 : -0.3); // Panic turn
+                     } 
+                     else {
+                        // Dumb seeking (nearest food)
+                        let closestFood = null; 
+                        let minDist = Infinity;
                         
-                        const wanderMag = Math.sqrt(finalX*finalX + finalY*finalY) || 1;
-                        finalX = (finalX / wanderMag) * 300; 
-                        finalY = (finalY / wanderMag) * 300;
-                        finalX += Math.cos(enemy.angle) * 500; 
-                        finalY += Math.sin(enemy.angle) * 500;
+                        // Limit food search radius so they wander aimlessly more often
+                        const viewRadius = 600; 
 
-                        let bestFood = null; 
-                        let maxFoodScore = -Infinity; 
-                        state.food.forEach((f) => { 
-                            const d = dist(enemy, f); 
-                            if(d < 800) { 
-                                const val = (f.level || 1) * 100 - d; 
-                                if(val > maxFoodScore) { maxFoodScore = val; bestFood = f; }
+                        for (let f of state.food) {
+                            const d = distSq(enemy, f);
+                            if (d < viewRadius**2 && d < minDist) {
+                                minDist = d;
+                                closestFood = f;
                             }
-                        }); 
-                        if(bestFood) { 
-                            finalX += (bestFood.x - enemy.x) * 2.0; 
-                            finalY += (bestFood.y - enemy.y) * 2.0; 
                         }
-                    }
 
-                    const distFromCenter = dist(enemy, {x:0, y:0});
-                    const mapEdge = WORLD_SIZE / 2;
-                    if (distFromCenter > mapEdge - 500) {
-                        finalX -= enemy.x * 6.0; 
-                        finalY -= enemy.y * 6.0;
-                    }
-
-                    state.mines.forEach(m => { 
-                        const d = dist(enemy, m); 
-                        if(d < 500) { 
-                            const push = 30000 / (d + 1); 
-                            finalX -= (m.x - enemy.x) * push; 
-                            finalY -= (m.y - enemy.y) * push; 
-                        } 
-                    });
-
-                    state.players.forEach(p => { 
-                        if (!p.dead && p !== target && p.napoleonPhase !== 'exiled') { 
-                            const d = dist(enemy, p);
-                            const edgeDist = d - p.scale - enemy.width;
-                            if (edgeDist < 600) { 
-                                const push = 1000000 / (Math.max(1, edgeDist)); 
-                                finalX -= (p.x - enemy.x) * push; 
-                                finalY -= (p.y - enemy.y) * push; 
-                            }
-                            for (let j = 0; j < p.body.length; j += 4) {
-                                const bd = dist(enemy, p.body[j]);
-                                const bEdgeDist = bd - p.scale - enemy.width;
-                                if(bEdgeDist < 400) {
-                                    const push = 200000 / (Math.max(1, bEdgeDist));
-                                    finalX -= (p.body[j].x - enemy.x) * push;
-                                    finalY -= (p.body[j].y - enemy.y) * push;
-                                }
-                            }
-                        } 
-                    });
-
-                    state.enemies.forEach(other => { 
-                        if(other !== enemy && other.alive && other !== target) { 
-                             if (distSq(enemy, other) < 40000) { 
-                                 const push = 10000 / (dist(enemy, other)+1);
-                                 finalX -= (other.x - enemy.x) * push;
-                                 finalY -= (other.y - enemy.y) * push;
-                            }
-                        } 
-                    });
-                } 
-
-                const targetAngle = Math.atan2(finalY, finalX); 
-                let diff = normalizeAngle(targetAngle - enemy.angle);
-                
-                let dynamicTurnSpeed = enemy.turnSpeed; 
-                if (forceSprint) dynamicTurnSpeed *= 1.5;
-                
-                const turn = dynamicTurnSpeed * aiTurnMult;
-                
-                if (Math.abs(diff) < turn) enemy.angle = targetAngle; 
-                else if (diff > 0) enemy.angle += turn; 
-                else enemy.angle -= turn; 
-                
-                enemy.angle = normalizeAngle(enemy.angle);
-                
-                let currentSpeed = enemy.speed; 
-                if (forceSprint && enemy.length > 145) { 
-                    currentSpeed = enemy.boostSpeed; 
+                        if (closestFood) {
+                             const targetA = Math.atan2(closestFood.y - enemy.y, closestFood.x - enemy.x);
+                             let diff = normalizeAngle(targetA - enemy.angle);
+                             enemy.angle += (diff > 0 ? enemy.turnSpeed : -enemy.turnSpeed); 
+                        } else {
+                            // Wiggle random
+                            enemy.angle += (Math.random() - 0.5) * 0.2;
+                        }
+                     }
                 }
                 
-                const spd = currentSpeed * aiSpeedMult; 
+                // 2. STANDARD (SERBIA) & SMART (RUSSIA) BEHAVIOR: RAYCAST SCORING
+                else {
+                    // Decide state based on Smart vs Standard capabilities
+                    const searchRadius = enemy.aiType === 'smart' ? 2500 : 1200; 
+                    let bestAngle = enemy.angle;
+                    let maxScore = -Infinity;
+                    
+                    // Angles to evaluate: current, +small, -small, +med, -med, +large, -large
+                    const count = enemy.aiType === 'smart' ? 9 : 5; // More brain power = more angles checked
+                    const step = Math.PI / (enemy.aiType === 'smart' ? 4 : 2); 
+                    
+                    // Identify threats/food beforehand to save loop cycles
+                    const threats = [];
+                    const foodTargets = [];
+                    
+                    // Prediction of own head based on NPPV
+                    const predictedHead = predict(enemy, lookAheadTime); 
+
+                    // Get Threats (Bodies of players/enemies, mines)
+                    [...state.players, ...state.enemies].forEach(e => {
+                        if (e !== enemy && e.alive !== false && !e.dead) {
+                            // Check Distance to see if relevant
+                            if (distSq(enemy, e) < searchRadius**2) {
+                                // Add body segments as obstacles
+                                for(let i=0; i < e.body.length; i+=5) threats.push({type: 'body', obj: e.body[i]});
+                                // Add projected head position as High Danger obstacle
+                                if (enemy.aiType === 'smart' || enemy.aiType === 'standard') {
+                                    threats.push({type: 'head_predict', obj: predict(e, lookAheadTime), r: e.scale + 100}); 
+                                }
+                            }
+                        }
+                    });
+
+                    state.mines.forEach(m => {
+                        if(distSq(enemy, m) < searchRadius**2) threats.push({type: 'mine', obj: m});
+                    });
+
+                    // Evaluate angles
+                    for (let i = 0; i < count; i++) {
+                        // center indices: 0, 1, -1, 2, -2...
+                        let idx = Math.ceil(i/2) * (i%2===0 ? 1 : -1); 
+                        if (i===0) idx = 0;
+                        
+                        const testAngle = normalizeAngle(enemy.angle + (idx * 0.25)); 
+                        let score = 0;
+                        
+                        // Vector for this angle
+                        const vx = Math.cos(testAngle);
+                        const vy = Math.sin(testAngle);
+                        
+                        // Lookahead point for walls/bounds
+                        const pLook = {
+                            x: enemy.x + vx * 600, 
+                            y: enemy.y + vy * 600
+                        };
+
+                        // 1. WALL AVOIDANCE (High Weight)
+                        if (Math.abs(pLook.x) > WORLD_SIZE/2 || Math.abs(pLook.y) > WORLD_SIZE/2) {
+                            score -= 500 * weights.wall; 
+                        }
+
+                        // 2. COLLISION AVOIDANCE
+                        // Project a few points along the path (Smart AI checks further)
+                        const steps = enemy.aiType === 'smart' ? 5 : 3;
+                        const distStep = 200; 
+                        let pathBlocked = false;
+
+                        for(let s=1; s<=steps; s++) {
+                             const ck = {x: enemy.x + vx * s * distStep, y: enemy.y + vy * s * distStep};
+                             // Check threats against this point
+                             for (let t of threats) {
+                                 let safeDist = 100 + enemy.width; 
+                                 if (t.type === 'head_predict') safeDist = t.r + enemy.width;
+                                 if (t.type === 'mine') safeDist = 300; 
+
+                                 if (distSq(ck, t.obj) < safeDist**2) {
+                                     const severity = (steps - s + 1); // Closer = Worse
+                                     if(t.type === 'head_predict') score -= 200 * severity * weights.collision;
+                                     else if(t.type === 'mine') score -= 100 * severity * weights.mine;
+                                     else score -= 100 * severity * weights.collision; 
+                                     
+                                     pathBlocked = true;
+                                 }
+                             }
+                             if(pathBlocked) break;
+                        }
+
+                        // 3. FOOD ATTRACTION
+                        // Check dot product to nearest few food items
+                        let localFoodScore = 0;
+                        let foundFood = 0;
+                        for(let f of state.food) {
+                            if(foundFood > 5) break; 
+                            if(distSq(enemy, f) < 800**2) { // 800px range
+                                const dx = f.x - enemy.x;
+                                const dy = f.y - enemy.y;
+                                const mag = Math.sqrt(dx*dx + dy*dy);
+                                const dot = (vx * (dx/mag)) + (vy * (dy/mag));
+                                if(dot > 0.5) { // Roughly facing food
+                                    localFoodScore += dot * (f.level||1) * 20; 
+                                    foundFood++;
+                                }
+                            }
+                        }
+                        score += localFoodScore * weights.food;
+
+                        // 4. SMART AI ONLY: Aggression / Escape
+                        if (enemy.aiType === 'smart') {
+                            // If larger than nearest enemy head, bias towards it
+                            // Finding targets... logic omitted for speed, simplistic 'kill opportunity'
+                            // space bias: 
+                        }
+
+                        if (score > maxScore) {
+                            maxScore = score; 
+                            bestAngle = testAngle;
+                        }
+                    }
+                    
+                    // Smooth turn to best angle
+                    let diff = normalizeAngle(bestAngle - enemy.angle);
+                    if (Math.abs(diff) < enemy.turnSpeed) enemy.angle = bestAngle; 
+                    else enemy.angle += (diff > 0 ? enemy.turnSpeed : -enemy.turnSpeed); 
+                }
+
+                enemy.angle = normalizeAngle(enemy.angle);
+
+                // --- SPRINT LOGIC ---
+                // Simple logic for standard/dumb: random sprint. 
+                // Smart: sprint if valid path and chasing food/kill or escaping
+                let shouldSprint = false;
+                if (enemy.length > MIN_LENGTH + 20) {
+                     if (enemy.aiType === 'dumb' && Math.random() < 0.02) shouldSprint = true;
+                     else if (enemy.aiType === 'smart' && dist(enemy, {x:0,y:0}) < WORLD_SIZE/3) shouldSprint = true; 
+                }
+                // Don't burn all mass
+                if (enemy.length < 150) shouldSprint = false;
+
+                let spd = enemy.speed * aiSpeedMult;
+                if (shouldSprint) { spd = enemy.boostSpeed * aiSpeedMult; enemy.length -= SPRINT_COST; }
+
                 enemy.x += Math.cos(enemy.angle) * spd; 
                 enemy.y += Math.sin(enemy.angle) * spd;
 
+                // --- WORLD BOUNDS DEATH ---
                 if(Math.abs(enemy.x) > WORLD_SIZE/2 || Math.abs(enemy.y) > WORLD_SIZE/2) { 
                     killEnemy(enemy, null); 
                     return; 
                 }
 
+                // Update Body
                 enemy.body.unshift({ x: enemy.x, y: enemy.y }); 
                 while (enemy.body.length > enemy.length) enemy.body.pop();
 
+                // Check Food Collision
                 for (let i = state.food.length - 1; i >= 0; i--) { 
                     if (coll(enemy, state.food[i], enemy.width + 10)) { 
                         state.food.splice(i, 1); 
@@ -1537,6 +1583,7 @@
                     } 
                 }
 
+                // Check Entity Collision (Killing other bots)
                 state.enemies.forEach(other => { 
                     if(other !== enemy && other.alive) { 
                         for(let b of other.body) { 
@@ -1546,6 +1593,8 @@
                         } 
                     } 
                 });
+                
+                // Killing Players
                 state.players.forEach((p) => { 
                     if (!p.dead && p.active && p.napoleonPhase !== 'exiled') { 
                         if (coll(p, enemy, p.scale + enemy.width)) killPlayer(p, null); 
@@ -2160,3 +2209,4 @@
     </script>
 </body>
 </html>
+```
