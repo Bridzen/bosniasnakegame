@@ -1,9 +1,10 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: AI Fixed (No Circles)</title>
+    <title>Bosnia Snake: Aggressive AI Update</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -1233,7 +1234,7 @@
             p.body.unshift({ x: p.x, y: p.y }); while (p.body.length > p.length) p.body.pop();
         }
 
-        // --- NEW: AI UPDATE LOGIC (TARGET POINT SYSTEM) ---
+        // --- UPDATED AI LOGIC: FIXING CIRCLES & AGGRESSION ---
         function updateAI() {
             const state = gameData;
             const now = Date.now();
@@ -1259,8 +1260,8 @@
                 });
 
                 // --- 1. WANDER TARGET SYSTEM (Linear Motion) ---
-                // Assign a target point (tx, ty) if none exists or if reached
-                if (!enemy.targetX || dist(enemy, {x: enemy.targetX, y: enemy.targetY}) < 200) {
+                // Reset target if too close (400px to avoid orbiting)
+                if (!enemy.targetX || dist(enemy, {x: enemy.targetX, y: enemy.targetY}) < 400) {
                     enemy.targetX = randPosCell();
                     enemy.targetY = randPosCell();
                 }
@@ -1269,10 +1270,10 @@
                 let finalX = enemy.targetX - enemy.x;
                 let finalY = enemy.targetY - enemy.y;
                 
-                // Normalize wander vector (so it doesn't overpower everything else)
-                const wanderMag = Math.sqrt(finalX*finalX + finalY*finalY) || 1;
-                finalX = (finalX / wanderMag) * 300; // Base drive strength
-                finalY = (finalY / wanderMag) * 300;
+                // --- VITAL FIX: FORWARD BIAS ---
+                // Add current velocity to prevent stopping/spinning
+                finalX += Math.cos(enemy.angle) * 500; 
+                finalY += Math.sin(enemy.angle) * 500;
 
                 let forceSprint = false;
 
@@ -1283,16 +1284,17 @@
                         if (d < AGGRO_RADIUS) {
                             if (enemy.width > p.scale) {
                                 // HUNT: Override Wander completely
-                                finalX = (p.x - enemy.x) * 2.0; 
-                                finalY = (p.y - enemy.y) * 2.0;
+                                finalX = (p.x - enemy.x) * 2.5; // Increased hunt strength
+                                finalY = (p.y - enemy.y) * 2.5;
                                 if (d < 600) forceSprint = true; // Sprint for kill
-                            } else {
-                                // FLEE: Run away fast
+                            } else if (p.scale > enemy.width * 1.3 && d < 600) {
+                                // FLEE: Only if player is >30% bigger AND close (600px)
                                 const push = 500000 / (d + 1); 
                                 finalX -= (p.x - enemy.x) * push; 
                                 finalY -= (p.y - enemy.y) * push; 
                                 forceSprint = true;
                             }
+                            // Otherwise (close size), do nothing special (fight/ignore)
                         }
                         // Avoid Bodies (Critical)
                         for(let i=0; i < p.body.length; i+=3) { 
@@ -1307,7 +1309,7 @@
                     } 
                 });
 
-                // --- 3. OBSTACLE AVOIDANCE (The Anti-Loop) ---
+                // --- 3. OBSTACLE AVOIDANCE ---
                 // Push away from walls
                 const distFromCenter = dist(enemy, {x:0, y:0});
                 const mapEdge = WORLD_SIZE / 2;
@@ -1326,7 +1328,7 @@
                     } 
                 });
 
-                // Seek Food (Weak force, adds variety)
+                // Seek Food
                 if (!forceSprint) {
                     let closestFood = null; 
                     let minFoodDist = 500; 
@@ -1392,7 +1394,7 @@
                 state.enemies.forEach(other => { 
                     if(other !== enemy && other.alive) { 
                         // Avoid head-to-head
-                        if (distSq(enemy, other) < 40000) { // 200px range
+                        if (distSq(enemy, other) < 40000) { 
                              const push = 10000 / (dist(enemy, other)+1);
                              finalX -= (other.x - enemy.x) * push;
                              finalY -= (other.y - enemy.y) * push;
