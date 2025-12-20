@@ -1115,7 +1115,7 @@
 
         function resetWorld(spawnBots) {
             const s = gameData; s.food = []; s.mines = []; s.explosions = []; s.syrupZones = []; s.shakeIntensity = 0; s.gameOver = false;
-            for (let i = 0; i < 400; i++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); }
+            for (let i = 0; i < 1200; i++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); }
             for (let i = 0; i < 80; i++) { s.mines.push({ x: randPosCell(), y: randPosCell(), state: "idle", timer: 3.0, lastTick: Date.now() }); }
             s.players.forEach((p) => {
                 p.x = randPosCell(); p.y = randPosCell(); p.body = []; p.length = 140; 
@@ -1597,7 +1597,7 @@
                 if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1); 
             }
 
-            if (s.food.length < 400) { for (let k = 0; k < 10; k++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); } }
+            if (s.food.length < 1200) { for (let k = 0; k < 10; k++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); } }
             activeEntities.forEach((p) => { if (p.country === "golden_maple" && p.maplePhase === "harvest") { s.food.forEach((f) => { if (distSq(p, f) < (5 * CELL)**2) f.isGolden = true; }); } });
             
             // --- NAPOLEON POCKET DIMENSION FOOD ---
@@ -2190,4 +2190,5 @@
     </script>
 </body>
 </html>
+
 
