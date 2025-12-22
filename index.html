@@ -594,22 +594,20 @@
                     // AI gets extra growth (2.5x base), Players get normal growth
                     // Note: Players have 'scale', Bots have 'baseScale' and 'width'
                if (eatenBy.id !== undefined) {
-                        // PLAYER GROWTH
-                        let growthMult = 1.0; 
-                        if (eatenBy.id === currentState.myPlayerIndex && userStats.level >= 10) growthMult = 1.2;
-                        eatenBy.length += LENGTH_GAIN * multiplier * growthMult; 
-                        eatenBy.scale = Math.min(2000, eatenBy.scale + (foodLevel * SIZE_GAIN_PER_LEVEL * multiplier * growthMult)); 
-                    } else {
-                        // AI GROWTH 
-                        const botMultLength = 1.3;
-                        const botMultWidth = 4;
-                        
-                        eatenBy.length += LENGTH_GAIN * botMultLength;
-                        
-                        // FIXED: Changed 'botMult' to 'botMultWidth'
-                        eatenBy.baseScale += (foodLevel || 1) * SIZE_GAIN_PER_LEVEL * botMultWidth;
-                        eatenBy.width = eatenBy.baseScale;
-                    }
+                    // PLAYER GROWTH
+                    let growthMult = 1.0; 
+                    if (eatenBy.id === currentState.myPlayerIndex && userStats.level >= 10) growthMult = 1.2;
+                    eatenBy.length += LENGTH_GAIN * multiplier * growthMult; 
+                    eatenBy.scale = Math.min(2000, eatenBy.scale + (foodLevel * SIZE_GAIN_PER_LEVEL * multiplier * growthMult)); 
+                } else {
+                    // AI GROWTH (Preserving the 2.5x multiplier from original logic)
+                    const BotMult = 1.3;
+                    eatenBy.length += LENGTH_GAIN * botMultLength;
+                    eatenBy.baseScale += (foodLevel || 1) * SIZE_GAIN_PER_LEVEL * botMult;
+                    eatenBy.width = eatenBy.baseScale;
+                }
+
+            }
                 // If not eaten, but inside a magnet zone, MOVE the food
                 else if (strongestMagnet) {
                     const mScale = strongestMagnet.scale || strongestMagnet.width || 12;
@@ -826,5 +824,6 @@
 </body>
 </html>
 ```
+
 
 
