@@ -170,8 +170,8 @@
 
         const OWNER_PASSWORD = "Roblox13_isme";
         const CELL = 150; const GRID = 160; const WORLD_SIZE = CELL * GRID;
-        const MIN_LENGTH = 140; const SPRINT_COST = 0.5; const BASE_SPEED = 4.2; const TURN_SPEED = 0.09;
-        const MAX_ENEMIES = 12; // INCREASED to 12
+        const MIN_LENGTH = 140; const SPRINT_COST = 0.4; const BASE_SPEED = 5.2; const TURN_SPEED = 0.12;
+        const MAX_ENEMIES = 9; // INCREASED to 12
         const SIZE_GAIN_PER_LEVEL = 0.15; const FOOD_RADIUS_BASE = 6; const LENGTH_GAIN = 8;
         const BROADCAST_RATE = 45; const INTERPOLATION_SPEED = 0.35; const TWO_PI = Math.PI * 2;
 
@@ -226,7 +226,7 @@
 
         function resetWorld(spawnBots) {
             const s = gameData; s.food = []; s.mines = []; s.explosions = []; s.syrupZones = []; s.shakeIntensity = 0; s.gameOver = false;
-            for (let i = 0; i < 400; i++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); }
+            for (let i = 0; i < 1350; i++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); }
             for (let i = 0; i < 80; i++) { s.mines.push({ x: randPosCell(), y: randPosCell(), state: "idle", timer: 3.0, lastTick: Date.now() }); }
             s.players.forEach((p) => { p.x = randPosCell(); p.y = randPosCell(); p.body = []; p.length = 140; let startScale = 18; if (p.id === currentState.myPlayerIndex && userStats.level >= 5) startScale += 5; p.scale = startScale; p.dead = false; p.frozenUntil = 0; p.abilityActive = false; p.lastAbilityTime = 0; p.maplePhase = null; p.kingdomPhase = null; p.napoleonPhase = null; p.minesExplodedCurrentGame = 0; p.barrageActive = false; p.barrageStartTime = 0; p.nextExplosionTime = 0; p.sovietBoost = false; p.currentKillStreak = 0; if (currentState.isDedicatedServer && p.id === 0) { p.scale = 50; p.length = 500; } });
             s.enemies = []; 
@@ -497,7 +497,7 @@
             const s = gameData; const now = Date.now();
             for (let i = s.syrupZones.length - 1; i >= 0; i--) { if (now > s.syrupZones[i].expiresAt) s.syrupZones.splice(i, 1); }
             for (let i = s.explosions.length - 1; i >= 0; i--) { const expansionSpeed = 1 + (s.explosions[i].alpha * 10); s.explosions[i].radius += expansionSpeed; s.explosions[i].alpha -= 0.011; if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1); }
-            if (s.food.length < 400) { for (let k = 0; k < 10; k++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); } }
+            if (s.food.length < 1350) { for (let k = 0; k < 10; k++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); } }
             activeEntities.forEach((p) => { if (p.country === "golden_maple" && p.maplePhase === "harvest") { s.food.forEach((f) => { if (distSq(p, f) < (5 * CELL)**2) f.isGolden = true; }); } });
             const napoleonPlayer = gameData.players.find(p => p.napoleonPhase === 'exiled');
             if(napoleonPlayer) {
@@ -662,3 +662,4 @@
     </script>
 </body>
 </html>
+
