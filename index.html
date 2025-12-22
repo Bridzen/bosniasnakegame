@@ -1,3 +1,4 @@
+```nolan is dumb.
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -171,9 +172,10 @@
         const OWNER_PASSWORD = "Roblox13_isme";
         const CELL = 150; const GRID = 160; const WORLD_SIZE = CELL * GRID;
         const MIN_LENGTH = 140; const SPRINT_COST = 0.4; const BASE_SPEED = 5.2; const TURN_SPEED = 0.12;
-        const MAX_ENEMIES = 9; // INCREASED to 12
+        const MAX_ENEMIES = 9; 
         const SIZE_GAIN_PER_LEVEL = 0.15; const FOOD_RADIUS_BASE = 6; const LENGTH_GAIN = 8;
         const BROADCAST_RATE = 45; const INTERPOLATION_SPEED = 0.35; const TWO_PI = Math.PI * 2;
+        const MAX_FOOD = 2000; // Increased Limit
 
         const SKINS_NORMAL = ["bosnia", "russia", "germany", "france", "canada", "ukraine", "usa", "uk", "italy", "poland", "sweden", "denmark", "spain", "netherlands", "greece", "switzerland", "norway", "finland", "portugal", "turkey", "china", "serbia", "croatia"];
         const SKINS_SPECIAL = ["ireland", "soviet", "golden_maple", "bosnian_kingdom", "napoleonic_france"];
@@ -226,7 +228,8 @@
 
         function resetWorld(spawnBots) {
             const s = gameData; s.food = []; s.mines = []; s.explosions = []; s.syrupZones = []; s.shakeIntensity = 0; s.gameOver = false;
-            for (let i = 0; i < 1350; i++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); }
+            // UPDATED: Spawn 2000 Food items
+            for (let i = 0; i < MAX_FOOD; i++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); }
             for (let i = 0; i < 80; i++) { s.mines.push({ x: randPosCell(), y: randPosCell(), state: "idle", timer: 3.0, lastTick: Date.now() }); }
             s.players.forEach((p) => { p.x = randPosCell(); p.y = randPosCell(); p.body = []; p.length = 140; let startScale = 18; if (p.id === currentState.myPlayerIndex && userStats.level >= 5) startScale += 5; p.scale = startScale; p.dead = false; p.frozenUntil = 0; p.abilityActive = false; p.lastAbilityTime = 0; p.maplePhase = null; p.kingdomPhase = null; p.napoleonPhase = null; p.minesExplodedCurrentGame = 0; p.barrageActive = false; p.barrageStartTime = 0; p.nextExplosionTime = 0; p.sovietBoost = false; p.currentKillStreak = 0; if (currentState.isDedicatedServer && p.id === 0) { p.scale = 50; p.length = 500; } });
             s.enemies = []; 
@@ -473,19 +476,7 @@
                 bot.body.unshift({ x: bot.x, y: bot.y });
                 while (bot.body.length > bot.length) bot.body.pop();
 
-                // Eat Food (Apply 2-3x Growth)
-                for (let i = state.food.length - 1; i >= 0; i--) {
-                    if (coll(bot, state.food[i], bot.width + 10)) {
-                        const f = state.food[i];
-                        state.food.splice(i, 1);
-                        // GROWTH MECHANIC: 2.5x Multiplier for AI
-                        const mult = 2.5;
-                        bot.length += LENGTH_GAIN * mult; 
-                        // No Max Scale Cap
-                        bot.baseScale += (f.level || 1) * SIZE_GAIN_PER_LEVEL * mult;
-                        bot.width = bot.baseScale;
-                    }
-                }
+                // NOTE: Eating Logic moved to updateEnvironment to handle Magnet logic for all
 
                 // Collisions (Bot dies)
                 state.enemies.forEach(other => { if(other !== bot && other.alive) { for(let b of other.body) { if(coll(bot, b, bot.width + other.width - 5)) { killEnemy(bot, other); } } } });
@@ -494,32 +485,202 @@
         }
 
         function updateEnvironment(activeEntities) {
-            const s = gameData; const now = Date.now();
-            for (let i = s.syrupZones.length - 1; i >= 0; i--) { if (now > s.syrupZones[i].expiresAt) s.syrupZones.splice(i, 1); }
-            for (let i = s.explosions.length - 1; i >= 0; i--) { const expansionSpeed = 1 + (s.explosions[i].alpha * 10); s.explosions[i].radius += expansionSpeed; s.explosions[i].alpha -= 0.011; if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1); }
-            if (s.food.length < 1350) { for (let k = 0; k < 10; k++) { let level = 1; while (level < 100 && Math.random() < 0.5) level++; s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); } }
-            activeEntities.forEach((p) => { if (p.country === "golden_maple" && p.maplePhase === "harvest") { s.food.forEach((f) => { if (distSq(p, f) < (5 * CELL)**2) f.isGolden = true; }); } });
+            const s = gameData; 
+            const now = Date.now();
+            
+            // 1. Handle Syrup Zones and Explosions
+            for (let i = s.syrupZones.length - 1; i >= 0; i--) { 
+                if (now > s.syrupZones[i].expiresAt) s.syrupZones.splice(i, 1); 
+            }
+            for (let i = s.explosions.length - 1; i >= 0; i--) { 
+                const expansionSpeed = 1 + (s.explosions[i].alpha * 10); 
+                s.explosions[i].radius += expansionSpeed; 
+                s.explosions[i].alpha -= 0.011; 
+                if (s.explosions[i].alpha <= 0) s.explosions.splice(i, 1); 
+            }
+
+            // 2. Respawn Food up to MAX_FOOD (2000)
+            if (s.food.length < MAX_FOOD) { 
+                for (let k = 0; k < 20; k++) { 
+                    let level = 1; 
+                    while (level < 100 && Math.random() < 0.5) level++; 
+                    s.food.push({ x: randPosCell(), y: randPosCell(), level: level }); 
+                } 
+            }
+
+            // 3. Special Ability Logic (Golden Maple / Napoleon)
+            activeEntities.forEach((p) => { 
+                if (p.country === "golden_maple" && p.maplePhase === "harvest") { 
+                    s.food.forEach((f) => { if (distSq(p, f) < (5 * CELL)**2) f.isGolden = true; }); 
+                } 
+            });
             const napoleonPlayer = gameData.players.find(p => p.napoleonPhase === 'exiled');
             if(napoleonPlayer) {
-                if(now - lastPocketSpawn > 5000) { lastPocketSpawn = now; const angle = Math.random() * TWO_PI; const r = Math.random() * (napoleonPlayer.scale * 15 - 50); const ox = (napoleonPlayer.exileAnchor ? napoleonPlayer.exileAnchor.x : napoleonPlayer.x) + Math.cos(angle) * r; const oy = (napoleonPlayer.exileAnchor ? napoleonPlayer.exileAnchor.y : napoleonPlayer.y) + Math.sin(angle) * r; pocketFood.push({x: ox, y: oy}); }
-                for(let i = pocketFood.length - 1; i >= 0; i--) { if(distSq(napoleonPlayer, pocketFood[i]) < (napoleonPlayer.scale + 20)**2) { pocketFood.splice(i, 1); playSound("eat"); napoleonPlayer.length += 40; napoleonPlayer.scale += 1.5; gainXP(50); } }
-            }
-            s.food.forEach((f, i) => { 
-                const foodLevel = f.level || 1; const rad = FOOD_RADIUS_BASE + foodLevel * 1.5; 
-                activeEntities.forEach((p) => { 
-                    if (!p.dead && p.napoleonPhase !== 'exiled' && coll(p, f, p.scale + rad)) { 
-                        if (p.id === currentState.myPlayerIndex) { playSound("eat"); gainXP(foodLevel * 2); } 
-                        s.food.splice(i, 1); const multiplier = f.isGolden ? 3 : 1; let growthMult = 1.0; if (p.id === currentState.myPlayerIndex && userStats.level >= 10) growthMult = 1.2;
-                        p.length += LENGTH_GAIN * multiplier * growthMult; p.scale = Math.min(2000, p.scale + (foodLevel * SIZE_GAIN_PER_LEVEL * multiplier * growthMult)); 
+                if(now - lastPocketSpawn > 5000) { 
+                    lastPocketSpawn = now; 
+                    const angle = Math.random() * TWO_PI; 
+                    const r = Math.random() * (napoleonPlayer.scale * 15 - 50); 
+                    const ox = (napoleonPlayer.exileAnchor ? napoleonPlayer.exileAnchor.x : napoleonPlayer.x) + Math.cos(angle) * r; 
+                    const oy = (napoleonPlayer.exileAnchor ? napoleonPlayer.exileAnchor.y : napoleonPlayer.y) + Math.sin(angle) * r; 
+                    pocketFood.push({x: ox, y: oy}); 
+                }
+                for(let i = pocketFood.length - 1; i >= 0; i--) { 
+                    if(distSq(napoleonPlayer, pocketFood[i]) < (napoleonPlayer.scale + 20)**2) { 
+                        pocketFood.splice(i, 1); 
+                        playSound("eat"); 
+                        napoleonPlayer.length += 40; 
+                        napoleonPlayer.scale += 1.5; 
+                        gainXP(50); 
                     } 
-                }); 
-            });
+                }
+            }
+
+            // 4. MAIN FOOD LOGIC: MAGNET & EATING (UNIFIED FOR PLAYERS AND BOTS)
+            for (let i = s.food.length - 1; i >= 0; i--) {
+                const f = s.food[i];
+                const foodLevel = f.level || 1;
+                const foodRad = FOOD_RADIUS_BASE + foodLevel * 1.5;
+                
+                let eatenBy = null;
+                let strongestMagnet = null;
+                let shortestDistSq = Infinity;
+
+                // Check every active entity (Player or Bot)
+                for (let entity of activeEntities) {
+                    if (entity.dead || (entity.napoleonPhase === 'exiled')) continue;
+
+                    // Get Entity properties (handle bot vs player structure differences if any)
+                    const entityScale = entity.scale || entity.width || 12; // Bots utilize width or baseScale
+
+                    const dx = entity.x - f.x;
+                    const dy = entity.y - f.y;
+                    const dSq = dx*dx + dy*dy;
+
+                    // Collision Radius (Actual Eating)
+                    const eatRadiusSq = (entityScale + foodRad) ** 2;
+
+                    if (dSq < eatRadiusSq) {
+                        eatenBy = entity;
+                        break; // Eaten immediately
+                    }
+
+                    // Magnet Radius Logic
+                    // SCALING: The bigger the entity, the larger the pull radius.
+                    const magnetRadius = (entityScale * 6) + 100; 
+                    const magnetRadiusSq = magnetRadius ** 2;
+
+                    if (dSq < magnetRadiusSq) {
+                        // Determine who is pulling the hardest (closest entity)
+                        if (dSq < shortestDistSq) {
+                            shortestDistSq = dSq;
+                            strongestMagnet = entity;
+                        }
+                    }
+                }
+
+                // If eaten, process stats and remove food
+                if (eatenBy) {
+                    s.food.splice(i, 1);
+                    
+                    // Is this a Player?
+                    if (eatenBy.id !== undefined && eatenBy.id === currentState.myPlayerIndex) {
+                        playSound("eat");
+                        gainXP(foodLevel * 2);
+                    }
+
+                    // Apply Growth
+                    const multiplier = f.isGolden ? 3 : 1; 
+                    
+                    // AI gets extra growth (2.5x base), Players get normal growth
+                    // Note: Players have 'scale', Bots have 'baseScale' and 'width'
+                    if (eatenBy.id !== undefined) {
+                        // PLAYER GROWTH
+                        let growthMult = 1.0; 
+                        if (eatenBy.id === currentState.myPlayerIndex && userStats.level >= 10) growthMult = 1.2;
+                        eatenBy.length += LENGTH_GAIN * multiplier * growthMult; 
+                        eatenBy.scale = Math.min(2000, eatenBy.scale + (foodLevel * SIZE_GAIN_PER_LEVEL * multiplier * growthMult)); 
+                    } else {
+                        // AI GROWTH (Preserving the 2.5x multiplier from original logic)
+                        const botMult = 2.5;
+                        eatenBy.length += LENGTH_GAIN * botMult;
+                        eatenBy.baseScale += (foodLevel || 1) * SIZE_GAIN_PER_LEVEL * botMult;
+                        eatenBy.width = eatenBy.baseScale;
+                    }
+
+                } 
+                // If not eaten, but inside a magnet zone, MOVE the food
+                else if (strongestMagnet) {
+                    const mScale = strongestMagnet.scale || strongestMagnet.width || 12;
+                    const angle = Math.atan2(strongestMagnet.y - f.y, strongestMagnet.x - f.x);
+                    
+                    // Speed Calculation: Base speed 12 + bonus based on size
+                    const pullSpeed = 12 + (mScale / 4);
+                    
+                    f.x += Math.cos(angle) * pullSpeed;
+                    f.y += Math.sin(angle) * pullSpeed;
+                }
+            }
+
+            // 5. Mine Logic
             for (let i = s.mines.length - 1; i >= 0; i--) {
                 let m = s.mines[i]; 
-                if (m.type === "bosnian_nuke" && m.state === "kingdom_fuse") { if (now >= m.fuseEnd) { createExplosion(m.x, m.y, m.maxRadius); activeEntities.forEach((p) => { if (!p.dead && p.napoleonPhase !== 'exiled') { if (p.id === m.ownerId) return; if (distSq(p, m) < m.maxRadius * m.maxRadius) { if(p.id !== undefined) killPlayer(p, null); else killEnemy(p, null); } } }); s.mines.splice(i, 1); } continue; }
-                const isBosnian = m.type === "bosnian"; const triggerRadius = 200; const explodeRadius = isBosnian ? 900 : 300; const delay = isBosnian ? 500 : 3000;
-                if (m.state === "idle") { let triggered = false; let triggerer = null; activeEntities.forEach((p) => { if (!p.dead && p.napoleonPhase !== 'exiled') { if (isBosnian && p.id === m.ownerId) return; if (distSq(p, m) < triggerRadius * triggerRadius) { triggered = true; triggerer = p; } } }); if (triggered) { m.state = "triggered"; m.lastTick = now; if (triggerer && triggerer.id === currentState.myPlayerIndex && !isBosnian) { triggerer.minesExplodedCurrentGame = (triggerer.minesExplodedCurrentGame || 0) + 1; updateStats({ minesExploded: triggerer.minesExplodedCurrentGame }); } } } 
-                else if (m.state === "triggered") { if (now - m.lastTick > delay) { createExplosion(m.x, m.y, isBosnian ? 200 : 10); activeEntities.forEach((p) => { if (!p.dead && p.napoleonPhase !== 'exiled') { if (isBosnian && p.id === m.ownerId) return; if (distSq(p, m) < explodeRadius * explodeRadius) { if(p.id !== undefined) killPlayer(p, null); else killEnemy(p, null); } } }); s.mines.splice(i, 1); } }
+                if (m.type === "bosnian_nuke" && m.state === "kingdom_fuse") { 
+                    if (now >= m.fuseEnd) { 
+                        createExplosion(m.x, m.y, m.maxRadius); 
+                        activeEntities.forEach((p) => { 
+                            if (!p.dead && p.napoleonPhase !== 'exiled') { 
+                                if (p.id === m.ownerId) return; 
+                                if (distSq(p, m) < m.maxRadius * m.maxRadius) { 
+                                    if(p.id !== undefined) killPlayer(p, null); 
+                                    else killEnemy(p, null); 
+                                } 
+                            } 
+                        }); 
+                        s.mines.splice(i, 1); 
+                    } 
+                    continue; 
+                }
+                const isBosnian = m.type === "bosnian"; 
+                const triggerRadius = 200; 
+                const explodeRadius = isBosnian ? 900 : 300; 
+                const delay = isBosnian ? 500 : 3000;
+                
+                if (m.state === "idle") { 
+                    let triggered = false; 
+                    let triggerer = null; 
+                    activeEntities.forEach((p) => { 
+                        if (!p.dead && p.napoleonPhase !== 'exiled') { 
+                            if (isBosnian && p.id === m.ownerId) return; 
+                            if (distSq(p, m) < triggerRadius * triggerRadius) { 
+                                triggered = true; 
+                                triggerer = p; 
+                            } 
+                        } 
+                    }); 
+                    if (triggered) { 
+                        m.state = "triggered"; 
+                        m.lastTick = now; 
+                        if (triggerer && triggerer.id === currentState.myPlayerIndex && !isBosnian) { 
+                            triggerer.minesExplodedCurrentGame = (triggerer.minesExplodedCurrentGame || 0) + 1; 
+                            updateStats({ minesExploded: triggerer.minesExplodedCurrentGame }); 
+                        } 
+                    } 
+                } 
+                else if (m.state === "triggered") { 
+                    if (now - m.lastTick > delay) { 
+                        createExplosion(m.x, m.y, isBosnian ? 200 : 10); 
+                        activeEntities.forEach((p) => { 
+                            if (!p.dead && p.napoleonPhase !== 'exiled') { 
+                                if (isBosnian && p.id === m.ownerId) return; 
+                                if (distSq(p, m) < explodeRadius * explodeRadius) { 
+                                    if(p.id !== undefined) killPlayer(p, null); 
+                                    else killEnemy(p, null); 
+                                } 
+                            } 
+                        }); 
+                        s.mines.splice(i, 1); 
+                    } 
+                }
             }
         }
 
@@ -662,4 +823,4 @@
     </script>
 </body>
 </html>
-
+```
