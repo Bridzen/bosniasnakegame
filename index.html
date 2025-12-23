@@ -1,10 +1,10 @@
-```nolan is very dumb.
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Bosnia Snake: Ultimate AI Update</title>
+    <title>Bosnia Snake: Ultimate AI Update (Fixed)</title>
     <!-- PeerJS for Multiplayer Networking -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     
@@ -593,21 +593,20 @@
                     
                     // AI gets extra growth (2.5x base), Players get normal growth
                     // Note: Players have 'scale', Bots have 'baseScale' and 'width'
-               if (eatenBy.id !== undefined) {
-                    // PLAYER GROWTH
-                    let growthMult = 1.0; 
-                    if (eatenBy.id === currentState.myPlayerIndex && userStats.level >= 10) growthMult = 1.2;
-                    eatenBy.length += LENGTH_GAIN * multiplier * growthMult; 
-                    eatenBy.scale = Math.min(2000, eatenBy.scale + (foodLevel * SIZE_GAIN_PER_LEVEL * multiplier * growthMult)); 
-                } else {
-                    // AI GROWTH (Preserving the 2.5x multiplier from original logic)
-                    const BotMult = 1.3;
-                    eatenBy.length += LENGTH_GAIN * botMultLength;
-                    eatenBy.baseScale += (foodLevel || 1) * SIZE_GAIN_PER_LEVEL * botMult;
-                    eatenBy.width = eatenBy.baseScale;
+                    if (eatenBy.id !== undefined) {
+                        // PLAYER GROWTH
+                        let growthMult = 1.0;
+                        if (eatenBy.id === currentState.myPlayerIndex && userStats.level >= 10) growthMult = 1.2;
+                        eatenBy.length += LENGTH_GAIN * multiplier * growthMult;
+                        eatenBy.scale = Math.min(2000, eatenBy.scale + (foodLevel * SIZE_GAIN_PER_LEVEL * multiplier * growthMult));
+                    } else {
+                        // AI GROWTH FIX - Corrected Variable Names
+                        const botMult = 2.5; // Increased for faster AI growth
+                        eatenBy.length += LENGTH_GAIN * botMult;
+                        eatenBy.baseScale += (foodLevel || 1) * SIZE_GAIN_PER_LEVEL * botMult;
+                        eatenBy.width = eatenBy.baseScale; // Important: Sync width with baseScale
+                    }
                 }
-
-            }
                 // If not eaten, but inside a magnet zone, MOVE the food
                 else if (strongestMagnet) {
                     const mScale = strongestMagnet.scale || strongestMagnet.width || 12;
@@ -824,6 +823,3 @@
 </body>
 </html>
 ```
-
-
-
